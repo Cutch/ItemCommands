@@ -1,0 +1,8 @@
+name: ItemCommands
+main: com.Cutch.bukkit.ICmds.ItemCommands
+version: 1.0
+author: Cutch
+commands:
+  ic:
+    description: Add Hotkey like functionality
+    usage: /ic [add|remove|click|list|bindto|per|reload]

@@ -1,0 +1,16 @@
+Features
+    Works with Permissions 2.7 and Basic Customizable OP support
+    Bind a command to a item/slot in your hand
+    Use left and right mouse buttons to triggers commands
+    Allow a Global control/command list or Player
+    Can also send a message to self instead of a command
+
+/ic 						#Shows this help in game with only the commands you can use
+
+/ic add [command] 			#Add command to the selected item 		- ICmds.create
+/ic remove 				#Remove command from the selected item 	- ICmds.create
+/ic click [left l|right r] 	#Change trigger of the selected item 		- ICmds.create
+/ic bindto [item i|slot s] 	#Binds commands to slots or items 		- ICmds.create(Globally) OR Cmds.use(Per Player)
+/ic list 					#List commands available to you 		- ICmds.use
+/ic per [player pl|global gl] 	#Set commands globally or per player 		- ICmds.admin
+/ic reload 												- ICmds.admin
