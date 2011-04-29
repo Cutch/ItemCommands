@@ -91,14 +91,14 @@ public class ItemCommands extends JavaPlugin {
                             String pcmd = cmd.cmd;
                             if(pcmd.contains(":0"))
                                 pcmd = pcmd.replaceFirst(":0", "");
-                            player.sendMessage(cmdc + "Command: " + pcmd + " added to "+(bindto == 0 ? "item" : "slot") + " " + key + " for " + (permissions == 0?player.getName():"Everyone"));
+                            sendMessage(player, cmdc + "Command: " + pcmd + " added to "+(bindto == 0 ? "item" : "slot") + " " + key + " for " + (permissions == 0?player.getName():"Everyone"));
                             saveDB();
                         }
                         else
-                            player.sendMessage(cmdc + "Usage: /ic add [command] "+descc+"#Add command to the selected item");
+                            sendMessage(player, cmdc + "Usage: /ic add [command] "+descc+"#Add command to the selected item");
                     }
                     else
-                        player.sendMessage(errc + "You do not have the required permissions for this.");
+                        sendMessage(player, errc + "You do not have the required permissions for this.");
                 }
                 else if(args[0].equalsIgnoreCase("remove"))
                 {
@@ -117,9 +117,9 @@ public class ItemCommands extends JavaPlugin {
                             if(player != null)
                             {
                                 if(dict == null || (cmd = dict.remove(key).cmd) == null)
-                                    player.sendMessage(cmdc + "Command not mapped to item " + key);
+                                    sendMessage(player, cmdc + "Command not mapped to item " + key);
                                 else
-                                    player.sendMessage(cmdc + "Command: "+ cmd +" removed from "+(bindto == 0 ? "item" : "slot")+" " + key + " for " + (permissions == 0?player.getName():"Everyone"));
+                                    sendMessage(player, cmdc + "Command: "+ cmd +" removed from "+(bindto == 0 ? "item" : "slot")+" " + key + " for " + (permissions == 0?player.getName():"Everyone"));
                             } else {
                                 if(dict == null || (cmd = dict.remove(key).cmd) == null)
                                     System.out.println("Command not mapped to item " + key);
@@ -130,7 +130,7 @@ public class ItemCommands extends JavaPlugin {
                         }
                     }
                     else
-                        player.sendMessage(errc + "You do not have the required permissions for this.");
+                        sendMessage(player, errc + "You do not have the required permissions for this.");
                 }
                 else if(args[0].equalsIgnoreCase("click"))
                 {
@@ -151,24 +151,24 @@ public class ItemCommands extends JavaPlugin {
                             {
                                 cmd.click = 0;
                                 dict.put(key, cmd);
-                                player.sendMessage(cmdc + (bindto == 0 ? "Item" : "Slot") + " " + key + " is triggered with a right click");
+                                sendMessage(player, cmdc + (bindto == 0 ? "Item" : "Slot") + " " + key + " is triggered with a right click");
                                 saveDB();
                             }
                             else if(args[1].startsWith("l"))
                             {
                                 cmd.click = 1;
                                 dict.put(key, cmd);
-                                player.sendMessage(cmdc + (bindto == 0 ? "Item" : "Slot") + " " + key + " is triggered with a left click");
+                                sendMessage(player, cmdc + (bindto == 0 ? "Item" : "Slot") + " " + key + " is triggered with a left click");
                                 saveDB();
                             }
                             else
-                                player.sendMessage(errc + "Parameter " + args[1] + " not valid.");
+                                sendMessage(player, errc + "Parameter " + args[1] + " not valid.");
                         }
                         else
-                            player.sendMessage(errc + "You do not have the required permissions for this.");
+                            sendMessage(player, errc + "You do not have the required permissions for this.");
                     }
                     else
-                        player.sendMessage(cmdc + "Usage: /ic click [left l|right r] "+descc+"#Change trigger of the selected item");
+                        sendMessage(player, cmdc + "Usage: /ic click [left l|right r] "+descc+"#Change trigger of the selected item");
                 }
                 else if(args[0].equalsIgnoreCase("clickevent"))
                 {
@@ -189,24 +189,24 @@ public class ItemCommands extends JavaPlugin {
                             {
                                 cmd.clickevent = 1;
                                 dict.put(key, cmd);
-                                player.sendMessage(cmdc + (bindto == 0 ? "Item" : "Slot") + " " + key + " runs click events normally");
+                                sendMessage(player, cmdc + (bindto == 0 ? "Item" : "Slot") + " " + key + " runs click events normally");
                                 saveDB();
                             }
                             else if(args[1].equalsIgnoreCase("off") || args[1].equalsIgnoreCase("f"))
                             {
                                 cmd.clickevent = 0;
                                 dict.put(key, cmd);
-                                player.sendMessage(cmdc + (bindto == 0 ? "Item" : "Slot") + " " + key + " cancels click events");
+                                sendMessage(player, cmdc + (bindto == 0 ? "Item" : "Slot") + " " + key + " cancels click events");
                                 saveDB();
                             }
                             else
-                                player.sendMessage(errc + "Parameter " + args[1] + " not valid.");
+                                sendMessage(player, errc + "Parameter " + args[1] + " not valid.");
                         }
                         else
-                            player.sendMessage(errc + "You do not have the required permissions for this.");
+                            sendMessage(player, errc + "You do not have the required permissions for this.");
                     }
                     else
-                        player.sendMessage(cmdc + "Usage: /ic clickevent [on t| off f] "+descc+"#Change whether the normal click functionality is performed");
+                        sendMessage(player, cmdc + "Usage: /ic clickevent [on t| off f] "+descc+"#Change whether the normal click functionality is performed");
                 }
                 else if(args[0].equalsIgnoreCase("per"))
                 {
@@ -217,29 +217,29 @@ public class ItemCommands extends JavaPlugin {
                             if(args[1].startsWith("pl"))
                             {
                                 per = 1;
-                                player.sendMessage(cmdc + "Per Player command system initialized");
+                                sendMessage(player, cmdc + "Per Player command system initialized");
                                 savePref();
                             }
                             else if(args[1].startsWith("gl"))
                             {
                                 per = 0;
-                                player.sendMessage(cmdc + "Global command system initialized");
+                                sendMessage(player, cmdc + "Global command system initialized");
                                 savePref();
                             }
                             else if(args[1].startsWith("gr"))
                             {
                                 per = 2;
-                                player.sendMessage(cmdc + "Group command system initialized (NOT WORKING)");
+                                sendMessage(player, cmdc + "Group command system initialized (NOT WORKING)");
                                 savePref();
                             }
                             else
-                                player.sendMessage(errc + "Parameter " + args[1] + " not valid.");
+                                sendMessage(player, errc + "Parameter " + args[1] + " not valid.");
                         }
                         else
-                            player.sendMessage(errc + "You do not have the required permissions for this.");
+                            sendMessage(player, errc + "You do not have the required permissions for this.");
                     }
                     else
-                        player.sendMessage(cmdc + "Usage: /ic per [player in|global gl] "+descc+"#Set commands globally per player");
+                        sendMessage(player, cmdc + "Usage: /ic per [player in|global gl] "+descc+"#Set commands globally per player");
                 }
                 else if(args[0].equalsIgnoreCase("bindto"))
                 {
@@ -251,24 +251,24 @@ public class ItemCommands extends JavaPlugin {
                         {
                             if(args[1].startsWith("s"))
                             {
-                                player.sendMessage(cmdc + "Binded to slots");
+                                sendMessage(player, cmdc + "Binded to slots");
                                 dict.put("bindto", new ICommand("", 1, 0));
                                 saveDB();
                             }
                             else if(args[1].startsWith("i"))
                             {
                                 dict.put("bindto", new ICommand("", 0, 0));
-                                player.sendMessage(cmdc + "Binded to items");
+                                sendMessage(player, cmdc + "Binded to items");
                                 saveDB();
                             }
                             else
-                                player.sendMessage(errc + "Parameter " + args[1] + " not valid.");
+                                sendMessage(player, errc + "Parameter " + args[1] + " not valid.");
                         }
                         else
-                            player.sendMessage(cmdc + "Usage: /ic bindto [item i|slot s] "+descc+"#Binds commands to slots or items");
+                            sendMessage(player, cmdc + "Usage: /ic bindto [item i|slot s] "+descc+"#Binds commands to slots or items");
                     }
                     else
-                        player.sendMessage(errc + "You do not have the required permissions for this.");
+                        sendMessage(player, errc + "You do not have the required permissions for this.");
                 }
                 else if(args[0].equalsIgnoreCase("list"))
                 {
@@ -284,17 +284,17 @@ public class ItemCommands extends JavaPlugin {
                         else
                             key = String.valueOf(player.getItemInHand().getTypeId()) + ":" + String.valueOf(player.getItemInHand().getDurability());
                         ICommand cmd2 = dict.get(key);
-                        player.sendMessage(infoc + "Commands are set "+(this.per == 1 ? "per player" : "globally") + " and Binded to "+sbindto+"s");
+                        sendMessage(player, infoc + "Commands are set "+(this.per == 1 ? "per player" : "globally") + " and Binded to "+sbindto+"s");
                         if(cmd2 != null)
                         {
                             String a = (cmd2.click == 0 ? "right" : "left");
-                            player.sendMessage(infoc + "Current Command: "+descc+cmd2.cmd);
-                            player.sendMessage(infoc + "Triggered by a " + a + " click, " + a + " click events are "+(cmd2.clickevent == 1 ? "enabled" : "disable"));
+                            sendMessage(player, infoc + "Current Command: "+descc+cmd2.cmd);
+                            sendMessage(player, infoc + "Triggered by a " + a + " click, " + a + " click events are "+(cmd2.clickevent == 1 ? "enabled" : "disable"));
                         }
 
                         String str = "Commands (" + (this.per == 1 ? player.getName() : "Global") + ")";
-                        player.sendMessage(infoc + (bindto == 0 ? "Item" : "Slot") + "     Click Trigger     " + str);
-                        player.sendMessage(infoc + "-----------------------------------------------");
+                        sendMessage(player, infoc + (bindto == 0 ? "Item" : "Slot") + "     Click Trigger     " + str);
+                        sendMessage(player, infoc + "-----------------------------------------------");
                         ArrayList<String> list = Collections.list(dict.keys());
                         int linei=0;
                         if(list != null) {
@@ -306,7 +306,7 @@ public class ItemCommands extends JavaPlugin {
                                     {
                                         ICommand cmd = dict.get(i);
                                         String click = (cmd.click == 1 ? "Left" : "Right");
-                                        player.sendMessage((linei%2==0 ? cmdc : descc) + lspace(i,' ',4) + lspace(click,' ',20) + "     "+ cmd.cmd);
+                                        sendMessage(player, (linei%2==0 ? cmdc : descc) + lspace(i,' ',4) + lspace(click,' ',20) + "     "+ cmd.cmd);
                                         linei++;
                                     }
                                 }
@@ -314,7 +314,7 @@ public class ItemCommands extends JavaPlugin {
                         }
                     }
                     else
-                        player.sendMessage(errc + "You do not have the required permissions for this.");
+                        sendMessage(player, errc + "You do not have the required permissions for this.");
                 }
                 else if(args[0].equalsIgnoreCase("reload"))
                 {
@@ -323,10 +323,10 @@ public class ItemCommands extends JavaPlugin {
                         readDB();
                         readPref();
                         System.out.println("ItemCommands Has been Reloaded");
-                        player.sendMessage(ChatColor.RED+"ItemCommands: Has been Reloaded");
+                        sendMessage(player, ChatColor.RED+"ItemCommands: Has been Reloaded");
                     }
                     else
-                        player.sendMessage(errc + "You do not have the required permissions for this.");
+                        sendMessage(player, errc + "You do not have the required permissions for this.");
                 }
                 else
                     showHelp(player);
@@ -551,6 +551,8 @@ public class ItemCommands extends JavaPlugin {
 
     protected boolean checkPermissions(Player player, String node, boolean needOp)
     {
+        if(player == null)
+            return true;
         if (ItemCommands.Permissions == null || this.permissions == 1) {
             return (player.isOp() && needOp) || !needOp;
         }
@@ -581,33 +583,33 @@ public class ItemCommands extends JavaPlugin {
         else
             key = String.valueOf(player.getItemInHand().getTypeId()) + ":" + String.valueOf(player.getItemInHand().getDurability());
         ICommand cmd = dict.get(key);
-        player.sendMessage(ChatColor.GOLD + "Item Commands");
-        player.sendMessage(infoc + "Commands are set "+(this.per == 1 ? "per player" : "globally") + " and Binded to "+sbindto+"s");
+        sendMessage(player, ChatColor.GOLD + "Item Commands");
+        sendMessage(player, infoc + "Commands are set "+(this.per == 1 ? "per player" : "globally") + " and Binded to "+sbindto+"s");
         if(cmd != null)
         {
             String a = (cmd.click == 0 ? "right" : "left");
-            player.sendMessage(infoc + "Current Command: "+descc+cmd.cmd);
-            player.sendMessage(infoc + "Triggered by a " + a + " click, " + a + " click events are "+(cmd.clickevent == 1 ? "enabled" : "disable"));
+            sendMessage(player, infoc + "Current Command: "+descc+cmd.cmd);
+            sendMessage(player, infoc + "Triggered by a " + a + " click, " + a + " click events are "+(cmd.clickevent == 1 ? "enabled" : "disable"));
         }
         if(checkPermissions(player, "ICmds.create", createNeedOP)){
-            player.sendMessage(cmdc + "Usage: /icmd add [command] "+descc+"#Add command to the selected "+sbindto);
-            player.sendMessage(cmdc + "/icmd remove "+descc+"#Remove command from the selected "+sbindto);
-            player.sendMessage(cmdc + "/icmd click [left l|right r] "+descc+"#Change trigger of the selected "+sbindto);
-            player.sendMessage(cmdc + "/icmd clickevent [on t| off f] "+descc+"#Change whether the normal click functionality is performed");
+            sendMessage(player, cmdc + "Usage: /icmd add [command] "+descc+"#Add command to the selected "+sbindto);
+            sendMessage(player, cmdc + "/icmd remove "+descc+"#Remove command from the selected "+sbindto);
+            sendMessage(player, cmdc + "/icmd click [left l|right r] "+descc+"#Change trigger of the selected "+sbindto);
+            sendMessage(player, cmdc + "/icmd clickevent [on t| off f] "+descc+"#Change whether the normal click functionality is performed");
             i++;
         }
         if((per == 0 && checkPermissions(player, "ICmds.create", createNeedOP)) || (per == 1 && checkPermissions(player, "ICmds.use", useNeedOP))) {
-            player.sendMessage(cmdc + "/icmd bindto [item i|slot s] "+descc+"#Binds commands to slots or items");
+            sendMessage(player, cmdc + "/icmd bindto [item i|slot s] "+descc+"#Binds commands to slots or items");
             i++;}
         if(checkPermissions(player, "ICmds.use", useNeedOP)){
-            player.sendMessage(cmdc + "/icmd list "+descc+"#List commands available to you");
+            sendMessage(player, cmdc + "/icmd list "+descc+"#List commands available to you");
             i++;}
         if(checkPermissions(player, "ICmds.admin", adminNeedOP)){
-            player.sendMessage(cmdc + "/icmd per [player pl|global gl] "+descc+"#Set commands globally or per player");
-            player.sendMessage(cmdc + "/icmd reload");
+            sendMessage(player, cmdc + "/icmd per [player pl|global gl] "+descc+"#Set commands globally or per player");
+            sendMessage(player, cmdc + "/icmd reload");
             i++;}
         if(i == 0)
-            player.sendMessage(cmdc + "No Permissions to use ItemCommands");
+            sendMessage(player, cmdc + "No Permissions to use ItemCommands");
     }
     Dictionary<String, ICommand> getDict(Player player)
     {
@@ -630,5 +632,18 @@ public class ItemCommands extends JavaPlugin {
             dict.put("click", new ICommand("", bclick, 0));
         }
         return dict;
+    }
+    void sendMessage(Player player, String s)
+    {
+        if(player != null)
+            player.sendMessage(s);
+        else
+        {
+            s = s.replaceAll(cmdc.toString(), "");
+            s = s.replaceAll(descc.toString(), "");
+            s = s.replaceAll(errc.toString(), "");
+            s = s.replaceAll(infoc.toString(), "");
+            System.out.println(s);
+        }
     }
 }

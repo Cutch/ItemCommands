@@ -13,6 +13,7 @@ ICmds.create
 ICmds.create(Globally) OR ICmds.use(Per Player)
 /ic bindto [item i|slot s] 	#Binds commands to slots or items
 ICmds.use
+Allows for usage
 /ic list 			#List commands available to you
 ICmds.admin
 /ic per [player pl|global gl] 	#Set commands globally or per player
