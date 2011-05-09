@@ -1,32 +1,84 @@
 package com.Cutch.bukkit.ICmds;
 
+import java.util.ArrayList;
+
 public class ICommand
 {
+    protected final ItemCommands plugin;
+    public int id;
     public int click;
     public int clickevent;
     public String cmd;
-    public ICommand(String cmd)
+    public int global = 0;
+    public int bindto = 0;
+    public ArrayList<Item> consume = new ArrayList<Item>();;
+    public String player;
+    public String key;
+    public ICommand(String player, String key, String cmd, ItemCommands plugin)
     {
         cmd = cmd.trim();
-        if(cmd.length()>= 1)
-        this.click = cmd.length()>= 1?Character.getNumericValue(cmd.charAt(0)):0;
-        if(cmd.length()>= 2)
-        this.clickevent = cmd.length()>= 2?Character.getNumericValue(cmd.charAt(1)):0;
-        this.cmd = cmd.length()>= 3?cmd.substring(2):"";
+        this.player = player;
+        this.key = key;
+        this.id = Integer.parseInt(cmd.substring(0, 4));
+        this.click = Character.getNumericValue(cmd.charAt(4));
+        this.clickevent = Character.getNumericValue(cmd.charAt(5));
+        cmd = cmd.substring(6);
+        int i = cmd.split(" ")[0].lastIndexOf(";");
+        if(i != -1)
+            this.consume = parseConsume(cmd.substring(0, i));
+        this.cmd = cmd.substring(i+1);
+        if(key.contains(":"))
+            bindto = 0;
+        else
+            bindto = 1;
+        if(isGlobal())
+            global = 0;
+        else
+            global = 1;
+        this.plugin = plugin;
     }
-    public ICommand(String cmd, int click, int clickevent)
+    public ICommand(String player, String key, int id, String cmd, int click, int clickevent, ArrayList<Item> consume, ItemCommands plugin)
     {
+        this.player = player;
+        this.key = key;
         this.cmd = cmd;
         this.click = click;
         this.clickevent = clickevent;
+        this.id = id;
+        this.consume = consume;
+        if(key.contains(":"))
+            bindto = 0;
+        else
+            bindto = 1;
+        if(isGlobal())
+            global = 0;
+        else
+            global = 1;
+        this.plugin = plugin;
     }
     @Override
     public String toString()
     {
-        return String.valueOf(click) + String.valueOf(clickevent) + cmd;
+        String c = "";
+        for(Item i : consume)
+            c += i.toString();
+        String id = plugin.lspace(String.valueOf(this.id), "0", 4);
+        return id + String.valueOf(click) + String.valueOf(clickevent) + c + cmd;
     }
     public boolean runEvent()
     {
         return clickevent == 1;
+    }
+    public boolean isGlobal()
+    {
+        return player.isEmpty();
+    }
+    public static ArrayList<Item> parseConsume(String c)
+    {
+        ArrayList<Item> list = new ArrayList<Item>();
+        String[] ss = c.split(";");
+        for(String s : ss)
+            list.add(new Item(s));
+        return list;
     }
 }

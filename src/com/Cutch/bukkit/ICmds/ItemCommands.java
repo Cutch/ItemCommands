@@ -11,13 +11,18 @@ import java.io.IOException;
 import com.nijiko.permissions.PermissionHandler;
 import com.nijikokun.bukkit.Permissions.Permissions;
 import me.taylorkelly.help.Help;
+import org.bukkit.Location;
+import org.bukkit.Server;
 import org.bukkit.plugin.Plugin;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Dictionary;
 import java.util.Enumeration;
 import java.util.Hashtable;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -28,21 +33,31 @@ import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.ChatColor;
-import org.bukkit.entity.Player;
+import org.bukkit.block.Block;
+import org.bukkit.inventory.ItemStack;
 public class ItemCommands extends JavaPlugin {
     public boolean createNeedOP = true;
     public boolean useNeedOP = false;
+    public boolean globalNeedOP = true;
     public boolean adminNeedOP = true;
+    public int superNeedOP = -1;
+    public int superGlobalNeedOP = 1;
+    public int freeNeedOP = -1;
     ChatColor cmdc = ChatColor.BLUE;
     ChatColor descc = ChatColor.AQUA;
     ChatColor errc = ChatColor.RED;
     ChatColor infoc = ChatColor.YELLOW;
     String properties = "ItemCommands.properties";
     String database = "Commands.db";
-    int bclick = 0;
     public static PermissionHandler Permissions;
     private final PlayerEvents playerListener = new PlayerEvents(this);
-    public Dictionary<String, Dictionary<String, ICommand>> players = new Hashtable<String, Dictionary<String, ICommand>>();
+    HookPermissionHandler hookPermissionHandler=null;
+    int bclick = 0;
+    int keybindings = 1;
+    int permissions = 0;
+    Double version = null;
+    boolean update = true;
+    public Dictionary<String, Dictionary<String, ICommands>> players = new Hashtable<String, Dictionary<String, ICommands>>();
 
     public void onDisable() {
         System.out.println("ItemCommands is Disabled");
@@ -54,19 +69,29 @@ public class ItemCommands extends JavaPlugin {
 
         PluginDescriptionFile desc = this.getDescription();
         System.out.println("ItemCommands: v" + desc.getVersion() + " is Enabled");
-        readDB();
+        version = null;
         readPref();
+        readDB(true);
         setupPermissions();
         setupHelp();
     }
-
     @Override
     public boolean onCommand(CommandSender sender, Command cmd1, String commandLabel, String[] args) {
+        Plugin test = this.getServer().getPluginManager().getPlugin("Permissions");
+        Permissions p = (Permissions)test;
+        p.Security = hookPermissionHandler;
+        this.Permissions = p.getHandler();
         String cmdmsg = cmd1.getName();
-        Player player = null;
-        if (sender instanceof Player)
-            player = (Player)sender;
-        if(player != null || cmdmsg.equalsIgnoreCase("icmd"))
+        ICPlayer player = null;
+        String splayer = "";
+//        for(String s : args)
+//            sendMessage(player, errc + s);
+        if(sender instanceof Player)
+        {
+            player = new ICPlayer((Player)sender);
+            splayer = player.getName();
+        }
+        if(cmdmsg.equalsIgnoreCase("icmd"))
         {
             if(args.length >= 1)
             {
@@ -76,26 +101,103 @@ public class ItemCommands extends JavaPlugin {
                     {
                         if(args.length >= 2)
                         {
-                            String key;
-                            Dictionary<String, ICommand> dict = getDict(player);
-                            int bindto = dict.get("bindto").click;
-                            if(bindto == 1)
-                                key = String.valueOf(player.getInventory().getHeldItemSlot());
+                            String key = "";
+                            int click = 0;
+                            int clickevent = 0;
+                            int per = 1;
+                            int bindto = -1;
+                            int end = 0;
+                            ArrayList<Item> consumes = new ArrayList<Item>();
+                            for(int i = 1; i < args.length-1; i++)
+                            {
+                                if(args[i].equalsIgnoreCase("-s"))
+                                    bindto = 1;
+                                else if(args[i].equalsIgnoreCase("-i"))
+                                    bindto = 0;
+                                else if(args[i].equalsIgnoreCase("-r"))
+                                    click = 0;
+                                else if(args[i].equalsIgnoreCase("-l"))
+                                    click = 1;
+                                else if(args[i].equalsIgnoreCase("-e"))
+                                    clickevent = 1;
+                                else if(args[i].equalsIgnoreCase("-c"))
+                                {
+                                    String[] cs = args[++i].split(";");
+                                    for(String c : cs)
+                                    {
+                                        Item item = new Item(c);
+                                        consumes.add(item);
+                                    }
+                                }
+                                else if(args[i].equalsIgnoreCase("-g"))
+                                    per = 0;
+                                else if(args[i].equalsIgnoreCase("-t"))
+                                {
+                                    key = args[++i];
+                                }
+                                else
+                                {
+                                    end = i;
+                                    break;
+                                }
+                                end = i;
+                            }
+                            if(per == 0 && !checkPermissions(player, "ICmds.global", globalNeedOP))
+                                sendMessage(player, errc + "You do not have the required permissions for global assignments.");
                             else
-                                key = String.valueOf(player.getItemInHand().getTypeId()) + ":" + String.valueOf(player.getItemInHand().getDurability());
-                            String a = "";
-                            for(int i = 1; i < args.length; i++)
-                                a += (i == 1?"":" ") + args[i];
-                            ICommand cmd = new ICommand(a, bclick, 0);
-                            dict.put(key, cmd);
-                            String pcmd = cmd.cmd;
-                            if(pcmd.contains(":0"))
+                            {
+                                if(player == null && key.isEmpty())
+                                {
+                                    sendMessage(player, cmdc + "Usage: /icmd add [-t typeid] [-i item|-s slot] <flag> [command] "+descc+"#Add command globally");
+                                    return true;
+                                }
+                                if(bindto == -1)
+                                {
+                                    sendMessage(player, cmdc + "Need at least a -s slot or -i item flag");
+                                    return true;
+                                }
+                                if(key.isEmpty()){
+                                    if(bindto == 1)
+                                        key = String.valueOf(player.getInventory().getHeldItemSlot()+1);
+                                    else
+                                        key = String.valueOf(player.getItemInHand().getTypeId()) + ":" + String.valueOf(player.getItemInHand().getDurability());
+                                }
+                                else
+                                {
+                                    if(bindto == 1)
+                                    {
+                                        if(key.contains(":"))
+                                        {
+                                            sendMessage(player, cmdc + "Item Given instead of slot");
+                                            return true;
+                                        }
+                                        int slot = Integer.parseInt(key);
+                                        if(slot < 1 || slot > 9)
+                                        {
+                                            sendMessage(player, cmdc + "Slot # must be between 1-9");
+                                            return true;
+                                        }
+                                    } else {
+                                        if(!key.contains(":"))
+                                            key += ":0";
+                                    }
+                                }
+                                String a = "";
+                                for(int i = end+1; i < args.length; i++)
+                                    a += (i == end+1?"":" ") + args[i];
+                                if(per == 0)
+                                    splayer = "";
+                                int id = findNextID(splayer);
+                                ICommand cmd = new ICommand(splayer, key, id, a, click, clickevent, consumes, this);
+                                putDict(splayer, key, cmd);
+                                String pcmd = cmd.cmd;
                                 pcmd = pcmd.replaceFirst(":0", "");
-                            sendMessage(player, cmdc + "Command: " + pcmd + " added to "+(bindto == 0 ? "item" : "slot") + " " + key + " for " + (permissions == 0?player.getName():"Everyone"));
-                            saveDB();
+                                sendMessage(player, cmdc + "ID: " + id + " Command: " + pcmd + " added to "+(bindto == 0 ? "item" : "slot") + " " + key + " for " + (!splayer.isEmpty()?splayer:"Everyone"));
+                                saveDB();
+                            }
                         }
                         else
-                            sendMessage(player, cmdc + "Usage: /ic add [command] "+descc+"#Add command to the selected item");
+                            sendMessage(player, cmdc + "Usage: /icmd add [-i item|-s slot] <flags> [command] "+descc+"#Add command to the selected item");
                     }
                     else
                         sendMessage(player, errc + "You do not have the required permissions for this.");
@@ -104,209 +206,195 @@ public class ItemCommands extends JavaPlugin {
                 {
                     if(checkPermissions(player, "ICmds.create", createNeedOP))
                     {
-                        if(args.length == 1){
-                            String cmd = "";
-                            Dictionary<String, ICommand> dict = getDict(player);
-                            String key;
-                            int bindto = dict.get("bindto").click;
-                            if(bindto == 1)
-                                key = String.valueOf(player.getInventory().getHeldItemSlot());
-                            else
-                                key = String.valueOf(player.getItemInHand().getTypeId()) + ":" + String.valueOf(player.getItemInHand().getDurability());
-
-                            if(player != null)
+                        if(args.length >= 2){
+                            int id = Integer.parseInt(args[1]);
+                            ICommands cmds = getICmdsByID(player, id, splayer.isEmpty());
+                            ICommand cmd = null;
+                            if(cmds == null || (cmd = cmds.remove(id)) == null)
                             {
-                                if(dict == null || (cmd = dict.remove(key).cmd) == null)
-                                    sendMessage(player, cmdc + "Command not mapped to item " + key);
-                                else
-                                    sendMessage(player, cmdc + "Command: "+ cmd +" removed from "+(bindto == 0 ? "item" : "slot")+" " + key + " for " + (permissions == 0?player.getName():"Everyone"));
+                                sendMessage(player, cmdc + "Command not found.");
                             } else {
-                                if(dict == null || (cmd = dict.remove(key).cmd) == null)
-                                    System.out.println("Command not mapped to item " + key);
+                                sendMessage(player, cmdc + "Command: "+ cmd.cmd +" removed from "+(cmd.clickevent == 0 ? "item" : "slot")+" " + cmd.key + " for " + (!cmd.isGlobal()?player.getName():"Everyone"));
+                                saveDB();
+                            }
+                        }
+                        else
+                            sendMessage(player, cmdc + "Usage: /icmd remove [id] "+descc+"#Remove command by ID");
+                    }
+                    else
+                        sendMessage(player, errc + "You do not have the required permissions for this.");
+                }
+                else if(args[0].equalsIgnoreCase("swap"))
+                {
+                    if(checkPermissions(player, "ICmds.create", createNeedOP))
+                    {
+                        if(args.length >= 2){
+                            int id = Integer.parseInt(args[1]);
+                            int id2 = Integer.parseInt(args[2]);
+                            ICommands cmds = getICmdsByID(player, id, splayer.isEmpty());
+                            ICommand cmd = cmds.get(id);
+                            if(cmd != null)
+                            {
+                                if(cmd != null)
+                                {
+                                    ICommand cmd2 = cmds.get(id2);
+                                    cmd.id = id2;
+                                    cmd2.id = id;
+                                    cmds.putDict(cmd);
+                                    cmds.putDict(cmd2);
+                                    saveDB();
+                                } else
+                                    sendMessage(player, errc + "Id #1 "+id2+" was not found");
+                            } else
+                                sendMessage(player, errc + "Id #2 "+id+" was not found");
+                        }
+                        else
+                            sendMessage(player, cmdc + "Usage: /icmd swap [id #1] [id #2] "+descc+"#Swap commands by ID");
+                    }
+                    else
+                       sendMessage(player, errc + "You do not have the required permissions for this.");
+                }
+                else if(args[0].equalsIgnoreCase("change"))
+                {
+                    if(args.length >= 2)
+                    {
+                        if(checkPermissions(player, "ICmds.create", createNeedOP))
+                        {
+                            int id = Integer.parseInt(args[1]);
+                            String key = "";
+                            int click = -1;
+                            int clickevent = -1;
+                            int bindto = -1;
+                            int per = 1;
+                            int end = 0;
+                            ArrayList<Item> consumes = new ArrayList<Item>();
+                            int i;
+                            for(i = 2; i < args.length; i+=1)
+                            {
+                                if(args[i].equalsIgnoreCase("-s"))
+                                    bindto = 1;
+                                else if(args[i].equalsIgnoreCase("-i"))
+                                    bindto = 0;
+                                else if(args[i].equalsIgnoreCase("-r"))
+                                    click = 0;
+                                else if(args[i].equalsIgnoreCase("-l"))
+                                    click = 1;
+                                else if(args[i].equalsIgnoreCase("-e"))
+                                    clickevent = 1;
+                                else if(args[i].equalsIgnoreCase("-c"))
+                                {
+                                    String[] cs = args[++i].split(";");
+                                    for(String c : cs)
+                                    {
+                                        Item item = new Item(c);
+                                        consumes.add(item);
+                                    }
+                                }
+                                else if(args[i].equalsIgnoreCase("-g"))
+                                    per = 0;
+                                else if(args[i].equalsIgnoreCase("-t"))
+                                {
+                                    key = args[++i];
+                                }
                                 else
-                                    System.out.println("Command: "+ cmd +" removed from "+(bindto == 0 ? "item" : "slot")+" " + key + " for " + (permissions == 0?player.getName():"Everyone"));
+                                {
+                                    break;
+                                }
                             }
-                            saveDB();
-                        }
-                    }
-                    else
-                        sendMessage(player, errc + "You do not have the required permissions for this.");
-                }
-                else if(args[0].equalsIgnoreCase("click"))
-                {
-                    if(args.length >= 2)
-                    {
-                        String key;
-                        Dictionary<String, ICommand> dict = getDict(player);
-                        int bindto = dict.get("bindto").click;
-                        if(bindto == 1)
-                            key = String.valueOf(player.getInventory().getHeldItemSlot());
-                        else
-                            key = String.valueOf(player.getItemInHand().getTypeId()) + ":" + String.valueOf(player.getItemInHand().getDurability());
+                            end = i;
 
-                        if(checkPermissions(player, "ICmds.create", createNeedOP))
-                        {
-                            ICommand cmd = dict.get(key);
-                            if(args[1].startsWith("r"))
-                            {
-                                cmd.click = 0;
-                                dict.put(key, cmd);
-                                sendMessage(player, cmdc + (bindto == 0 ? "Item" : "Slot") + " " + key + " is triggered with a right click");
-                                saveDB();
-                            }
-                            else if(args[1].startsWith("l"))
-                            {
-                                cmd.click = 1;
-                                dict.put(key, cmd);
-                                sendMessage(player, cmdc + (bindto == 0 ? "Item" : "Slot") + " " + key + " is triggered with a left click");
-                                saveDB();
-                            }
+                            if(per == 0)
+                                splayer = "";
+                            ICommands cmds = getICmdsByID(player, id, per == 0);
+                            ICommand cmd = cmds.findByID(id);
+                            if(per == 0 && !checkPermissions(player, "ICmds.global", globalNeedOP))
+                                sendMessage(player, errc + "You do not have the required permissions for global assignments.");
                             else
-                                sendMessage(player, errc + "Parameter " + args[1] + " not valid.");
+                            {
+                                if(player == null && key.isEmpty())
+                                {
+                                    sendMessage(player, cmdc + "Usage: /icmd change [id] <flags> <command> "+descc+"#Change flags by id");
+                                    return true;
+                                }
+                                if(key.isEmpty())
+                                    key = cmd.key;
+                                if(cmd != null)
+                                {
+                                    if(key.isEmpty())
+                                        key = cmd.key;
+                                    if(click == -1)
+                                        click = cmd.click;
+                                    if(clickevent == -1)
+                                        clickevent = cmd.clickevent;
+                                    if(bindto == -1)
+                                        bindto = cmd.bindto;
+                                    else
+                                    {
+                                        String[] keys = new String[2];
+                                        ItemStack is = player.getItemInHand();
+                                        keys[0] = String.valueOf(is.getTypeId()) + ":" + String.valueOf(is.getDurability());
+                                        keys[1] = String.valueOf(player.getInventory().getHeldItemSlot()+1);
+                                        cmd.key = keys[bindto];
+                                        cmds.remove(id);
+                                        putDict(splayer, key, cmd);
+                                    }
+                                    if(per == -1)
+                                        per = cmd.global;
+                                    String a = "";
+                                    for(i = end; i < args.length; i++)
+                                        a += (i == end?"":" ") + args[i];
+                                    cmd.click=click;
+                                    if(!a.isEmpty())
+                                        cmd.cmd = a;
+                                    cmd.consume = consumes;
+                                    cmd.clickevent = clickevent;
+                                    putDict(splayer, key, cmd);
+                                    saveDB();
+                                }
+                                else
+                                    sendMessage(player, errc + "ID " + args[1] + " not valid.");
+                            }
                         }
                         else
                             sendMessage(player, errc + "You do not have the required permissions for this.");
                     }
                     else
-                        sendMessage(player, cmdc + "Usage: /ic click [left l|right r] "+descc+"#Change trigger of the selected item");
-                }
-                else if(args[0].equalsIgnoreCase("clickevent"))
-                {
-                    if(args.length >= 2)
-                    {
-                        String key;
-                        Dictionary<String, ICommand> dict = getDict(player);
-                        int bindto = dict.get("bindto").click;
-                        if(bindto == 1)
-                            key = String.valueOf(player.getInventory().getHeldItemSlot());
-                        else
-                            key = String.valueOf(player.getItemInHand().getTypeId()) + ":" + String.valueOf(player.getItemInHand().getDurability());
-
-                        if(checkPermissions(player, "ICmds.create", createNeedOP))
-                        {
-                            ICommand cmd = dict.get(key);
-                            if(args[1].equalsIgnoreCase("on") || args[1].equalsIgnoreCase("t"))
-                            {
-                                cmd.clickevent = 1;
-                                dict.put(key, cmd);
-                                sendMessage(player, cmdc + (bindto == 0 ? "Item" : "Slot") + " " + key + " runs click events normally");
-                                saveDB();
-                            }
-                            else if(args[1].equalsIgnoreCase("off") || args[1].equalsIgnoreCase("f"))
-                            {
-                                cmd.clickevent = 0;
-                                dict.put(key, cmd);
-                                sendMessage(player, cmdc + (bindto == 0 ? "Item" : "Slot") + " " + key + " cancels click events");
-                                saveDB();
-                            }
-                            else
-                                sendMessage(player, errc + "Parameter " + args[1] + " not valid.");
-                        }
-                        else
-                            sendMessage(player, errc + "You do not have the required permissions for this.");
-                    }
-                    else
-                        sendMessage(player, cmdc + "Usage: /ic clickevent [on t| off f] "+descc+"#Change whether the normal click functionality is performed");
-                }
-                else if(args[0].equalsIgnoreCase("per"))
-                {
-                    if(args.length >= 2)
-                    {
-                        if(checkPermissions(player, "ICmds.admin", adminNeedOP))
-                        {
-                            if(args[1].startsWith("pl"))
-                            {
-                                per = 1;
-                                sendMessage(player, cmdc + "Per Player command system initialized");
-                                savePref();
-                            }
-                            else if(args[1].startsWith("gl"))
-                            {
-                                per = 0;
-                                sendMessage(player, cmdc + "Global command system initialized");
-                                savePref();
-                            }
-                            else if(args[1].startsWith("gr"))
-                            {
-                                per = 2;
-                                sendMessage(player, cmdc + "Group command system initialized (NOT WORKING)");
-                                savePref();
-                            }
-                            else
-                                sendMessage(player, errc + "Parameter " + args[1] + " not valid.");
-                        }
-                        else
-                            sendMessage(player, errc + "You do not have the required permissions for this.");
-                    }
-                    else
-                        sendMessage(player, cmdc + "Usage: /ic per [player in|global gl] "+descc+"#Set commands globally per player");
-                }
-                else if(args[0].equalsIgnoreCase("bindto"))
-                {
-                    Dictionary<String, ICommand> dict = getDict(player);
-                    if((per == 0 && checkPermissions(player, "ICmds.create", createNeedOP))
-                            || (per == 1 && checkPermissions(player, "ICmds.use", useNeedOP)))
-                    {
-                        if(args.length >= 2)
-                        {
-                            if(args[1].startsWith("s"))
-                            {
-                                sendMessage(player, cmdc + "Binded to slots");
-                                dict.put("bindto", new ICommand("", 1, 0));
-                                saveDB();
-                            }
-                            else if(args[1].startsWith("i"))
-                            {
-                                dict.put("bindto", new ICommand("", 0, 0));
-                                sendMessage(player, cmdc + "Binded to items");
-                                saveDB();
-                            }
-                            else
-                                sendMessage(player, errc + "Parameter " + args[1] + " not valid.");
-                        }
-                        else
-                            sendMessage(player, cmdc + "Usage: /ic bindto [item i|slot s] "+descc+"#Binds commands to slots or items");
-                    }
-                    else
-                        sendMessage(player, errc + "You do not have the required permissions for this.");
+                        sendMessage(player, cmdc + "Usage: /icmd change [id] <flags> <command> "+descc+"#Change flags by id");
                 }
                 else if(args[0].equalsIgnoreCase("list"))
                 {
                     if(checkPermissions(player, "ICmds.use", useNeedOP))
                     {
-                        Dictionary<String, ICommand> dict = getDict(player);
-                        int bindto = dict.get("bindto").click;
-
-                        String sbindto = bindto == 0 ? "Item" : "Slot";
-                        String key = "";
-                        if(bindto == 1)
-                            key = String.valueOf(player.getInventory().getHeldItemSlot());
-                        else
-                            key = String.valueOf(player.getItemInHand().getTypeId()) + ":" + String.valueOf(player.getItemInHand().getDurability());
-                        ICommand cmd2 = dict.get(key);
-                        sendMessage(player, infoc + "Commands are set "+(this.per == 1 ? "per player" : "globally") + " and Binded to "+sbindto+"s");
-                        if(cmd2 != null)
+                        int fper = 1;
+                        int fbindto = -1;
+                        for(int i = 1; i < args.length; i+=1)
                         {
-                            String a = (cmd2.click == 0 ? "right" : "left");
-                            sendMessage(player, infoc + "Current Command: "+descc+cmd2.cmd);
-                            sendMessage(player, infoc + "Triggered by a " + a + " click, " + a + " click events are "+(cmd2.clickevent == 1 ? "enabled" : "disable"));
+                            if(args[i].equalsIgnoreCase("-s"))
+                                fbindto = 1;
+                            else if(args[i].equalsIgnoreCase("-i"))
+                                fbindto = 0;
+                            else if(args[i].equalsIgnoreCase("-g"))
+                                fper = 0;
                         }
-
-                        String str = "Commands (" + (this.per == 1 ? player.getName() : "Global") + ")";
-                        sendMessage(player, infoc + (bindto == 0 ? "Item" : "Slot") + "     Click Trigger     " + str);
-                        sendMessage(player, infoc + "-----------------------------------------------");
-                        ArrayList<String> list = Collections.list(dict.keys());
-                        int linei=0;
-                        if(list != null) {
-                            for (int i2 = 0; i2 < list.size(); i2++)
+                        String str = "Commands (" + (fper == 0 || splayer.isEmpty() ? "Global" : splayer) + ")";
+                        sendMessage(player, infoc + "  ID     Item/Slot     Click Trigger     " + str);
+                        sendMessage(player, infoc + "---------------------------------------------------");
+                        Dictionary<String, ICommands> get = players.get(fper == 1 ? splayer : "");
+                        if(get != null)
+                        {
+                            Enumeration<ICommands> elements = get.elements();
+                            int linei = 0;
+                            while(elements.hasMoreElements())
                             {
-                                String i = list.get(i2);
-                                if(!i.equalsIgnoreCase("bindto") && !i.equalsIgnoreCase("click")){
-                                    if((bindto == 0 && i.contains(":")) || (bindto == 1 && !i.contains(":")))
+                                ICommands cmds = elements.nextElement();
+                                Integer[] iDList = cmds.getIDList();
+                                for (Integer id : iDList)
+                                {
+                                    ICommand cmd = cmds.findByID(id);
+                                    if(fbindto == -1 || cmd.bindto == fbindto)
                                     {
-                                        ICommand cmd = dict.get(i);
                                         String click = (cmd.click == 1 ? "Left" : "Right");
-                                        sendMessage(player, (linei%2==0 ? cmdc : descc) + lspace(i,' ',4) + lspace(click,' ',20) + "     "+ cmd.cmd);
+                                        sendMessage(player, (linei%2==0 ? cmdc : descc) + lspace(String.valueOf(cmd.id)," ",4) + "     " + lspace(cmd.key.replaceAll(":0", "")," ",9) + lspace(click," ",20) + "     "+ cmd.cmd);
                                         linei++;
                                     }
                                 }
@@ -320,10 +408,11 @@ public class ItemCommands extends JavaPlugin {
                 {
                     if(checkPermissions(player, "ICmds.admin", adminNeedOP))
                     {
-                        readDB();
+                        players = new Hashtable<String, Dictionary<String, ICommands>>();
+                        version = null;
                         readPref();
-                        System.out.println("ItemCommands Has been Reloaded");
-                        sendMessage(player, ChatColor.RED+"ItemCommands: Has been Reloaded");
+                        readDB(true);
+                        sendMessage(player, ChatColor.RED+"ItemCommands Has been Reloaded");
                     }
                     else
                         sendMessage(player, errc + "You do not have the required permissions for this.");
@@ -345,6 +434,8 @@ public class ItemCommands extends JavaPlugin {
                 System.out.println("ItemCommands: Using Basic Permissions");
             else if(test != null) {
                 Permissions p = (Permissions)test;
+                hookPermissionHandler = new HookPermissionHandler(p);
+                p.Security = hookPermissionHandler;
                 this.Permissions = p.getHandler();
                 System.out.println("ItemCommands: Using Permissions Plugin v" + p.version);
             } else {
@@ -384,7 +475,7 @@ public class ItemCommands extends JavaPlugin {
         }
         catch (IOException e) { System.out.println(this.getDataFolder() + File.separator + file + " Could not be open"); }
     }
-    ArrayList<String> readData(String file)
+    ArrayList<String> readData(String file, boolean printerror)
     {
         FileReader fileReader = null;
         BufferedReader bufferedReader = null;
@@ -402,65 +493,81 @@ public class ItemCommands extends JavaPlugin {
         catch (FileNotFoundException e) {
             this.getDataFolder().mkdir();
             new File(this.getDataFolder() + File.separator + file);
-            System.out.println(this.getDataFolder() + File.separator + file + " Not Found");
+            if(printerror)
+                System.out.println(this.getDataFolder() + File.separator + file + " Not Found");
             data = null; }
         catch (IOException e) {
-            System.out.println(this.getDataFolder() + File.separator + file + " Could not be open");
+            if(printerror)
+                System.out.println(this.getDataFolder() + File.separator + file + " Could not be open");
             data = null; }
         return data;
     }
     void saveDB()
     {
-        ArrayList<String> data = new ArrayList<String>();
-        Enumeration<String> dict = players.keys();
-        for (;dict.hasMoreElements();)
-        {
-            String i = dict.nextElement();
-            Dictionary<String, ICommand> lines = players.get(i);
-            Enumeration<String> dict2 = lines.keys();
-
-            for (;dict2.hasMoreElements();)
+        if(update) {
+            ArrayList<String> data = new ArrayList<String>();
+            Enumeration<String> dict = players.keys();
+            for (;dict.hasMoreElements();)
             {
-                String i2 = dict2.nextElement();
-                ICommand line = lines.get(i2);
+                String i = dict.nextElement();
+                Dictionary<String, ICommands> lines = players.get(i);
+                Enumeration<String> dict2 = lines.keys();
 
-                data.add(i + " " + i2 + " " + line.toString());
+                for (;dict2.hasMoreElements();)
+                {
+                    String i2 = dict2.nextElement();
+                    Enumeration<ICommand> elements = lines.get(i2).cmds.elements();
+                    for(;elements.hasMoreElements();)
+                        data.add(i.replaceAll(" ", "&+") + " " + i2 + " " + elements.nextElement().toString());
+                }
             }
+            saveData(data, database);
         }
-        saveData(data, database);
     }
-    void readDB()
+    void readDB(boolean update)
     {
-        ArrayList<String> data = readData(database);
+        ArrayList<String> data = readData(database, true);
         String line = null;
-        String last = "@";
-        Dictionary<String, ICommand> dict = null;
         if(data != null){
             Collections.sort(data);
             for (int i2 = 0; i2 < data.size(); i2++)
             {
                 line = data.get(i2);
-                String[] s = line.split(" ");
-                if(!last.equalsIgnoreCase(s[0])){
-                    dict = getDict(s[0]);
-                    last = s[0];
+                int e = line.indexOf("#");
+                if(e != -1)
+                    line = line.substring(0, e);
+                if(update)
+                    version = getVersion(line, version);
+                if(!line.trim().isEmpty())
+                {
+                    String[] s = line.split(" ");
+                    String cmd2 = "";
+                    for(int i = 2; i < s.length; i++)
+                        cmd2 += (i == 2?"":" ") + s[i];
+                    String name = s[0].replaceAll("&+", " ");
+                    try
+                    {
+                        this.putDict(name, s[1], new ICommand(name, s[1], cmd2, this));
+                    }
+                    catch(Exception e2)
+                    {
+                        System.out.println("Line "+i2+" could not be parsed");
+                    }
                 }
-                String cmd2 = "";
-                for(int i = 2; i < s.length; i++)
-                    cmd2 += (i == 2?"":" ") + s[i];
-                dict.put(s[1], new ICommand(cmd2));
             }
         }
+        else
+            version = getVersion("", 0d);
     }
-    int per = 1;
-    int keybindings = 1;
-    int permissions = 0;
     void readPref()
     {
-        ArrayList<String> data = readData(properties);
+        superNeedOP = -1;
+        superGlobalNeedOP = -1;
+        freeNeedOP = -1;
+        ArrayList<String> data = readData(properties, true);
         if(data == null){
             savePref();
-            data = readData(properties);}
+            data = readData(properties, false);}
         String line = null;
         for(int i = 0; i < data.size(); i++)
         {
@@ -473,16 +580,20 @@ public class ItemCommands extends JavaPlugin {
             {
                 String name = p[0].trim();
                 String value = p[1].trim();
-                if(name.equalsIgnoreCase("per"))
+                if(name.equalsIgnoreCase("version"))
                 {
-                    if(value.equalsIgnoreCase("player"))
-                        per = 1;
-                    else if(value.equalsIgnoreCase("global"))
-                        per = 0;
-                    else if(value.equalsIgnoreCase("group"))
-                        per = 2;
+                    try{
+                        version=Double.parseDouble(value);}
+                    catch(NumberFormatException ew){
+                        System.out.println("Error in ItemCommands.properties version should be in the format x.xx but with numbers...");
+                    }
+                }
+                else if(name.equalsIgnoreCase("UpdateDB"))
+                {
+                    if(value.equalsIgnoreCase("true"))
+                        update = true;
                     else
-                        System.out.println("Error in ItemCommands.properties with per on line #" + i);
+                        update = false;
                 }
                 else if(name.equalsIgnoreCase("permissionType"))
                 {
@@ -492,24 +603,6 @@ public class ItemCommands extends JavaPlugin {
                         permissions = 1;}
                     else
                         System.out.println("Error in ItemCommands.properties with permissionType on line #" + i);
-                }
-                else if(name.equalsIgnoreCase("bindto"))
-                {
-                    if(value.equalsIgnoreCase("item")){
-                        keybindings = 0;}
-                    else if(value.equalsIgnoreCase("slot")){
-                        keybindings = 1;}
-                    else
-                        System.out.println("Error in ItemCommands.properties with bindto on line #" + i);
-                }
-                else if(name.equalsIgnoreCase("click"))
-                {
-                    if(value.equalsIgnoreCase("right")){
-                        bclick = 0;}
-                    else if(value.equalsIgnoreCase("left")){
-                        bclick = 1;}
-                    else
-                        System.out.println("Error in ItemCommands.properties with click on line #" + i);
                 }
                 else if(name.equalsIgnoreCase("createNeedOP"))
                 {
@@ -525,6 +618,13 @@ public class ItemCommands extends JavaPlugin {
                     else
                         useNeedOP = false;
                 }
+                else if(name.equalsIgnoreCase("globalNeedOP"))
+                {
+                    if(value.equalsIgnoreCase("true"))
+                        globalNeedOP = true;
+                    else
+                        globalNeedOP = false;
+                }
                 else if(name.equalsIgnoreCase("adminNeedOP"))
                 {
                     if(value.equalsIgnoreCase("true"))
@@ -532,41 +632,81 @@ public class ItemCommands extends JavaPlugin {
                     else
                         adminNeedOP = false;
                 }
+                else if(name.equalsIgnoreCase("superNeedOP"))
+                {
+                    if(value.equalsIgnoreCase("true"))
+                        superNeedOP = 1;
+                    else
+                        superNeedOP = 0;
+                }
+                else if(name.equalsIgnoreCase("superGlobalNeedOP"))
+                {
+                    if(value.equalsIgnoreCase("true"))
+                        superGlobalNeedOP = 1;
+                    else
+                        superGlobalNeedOP = 0;
+                }
+                else if(name.equalsIgnoreCase("freeNeedOP"))
+                {
+                    if(value.equalsIgnoreCase("true"))
+                        freeNeedOP = 1;
+                    else
+                        freeNeedOP = 0;
+                }
             }
         }
     }
     void savePref()
     {
-        ArrayList<String> data = new ArrayList<String>();
-        data.add("per=" + (per == 1 ? "player" : "global") + " #global OR player");
-        data.add("permissionType=" + (permissions == 0 ? "plugin" : "basic") + " #plugin OR basic");
-        data.add("bindto=" + (keybindings == 0 ? "item" : "slot") + " #slot OR item");
-        data.add("click=" + (bclick == 0 ? "right" : "left") + " #right OR left");
-        data.add("#For basic permission use only(No Plugin)");
-        data.add("useNeedOP="+String.valueOf(useNeedOP));
-        data.add("createNeedOP="+String.valueOf(createNeedOP));
-        data.add("adminNeedOP="+String.valueOf(adminNeedOP));
-        saveData(data, properties);
-    }
+        if(update) {
+            ArrayList<String> data = new ArrayList<String>();
+            data.add("Version="+this.getDescription().getVersion()+" #This is used to update the database and properties files");
+            data.add("UpdateDB="+String.valueOf(update)+" #Setting this to false will disable version updates for the database, it will be usable but changes wont be saved");
+            data.add("PermissionType=" + (permissions == 0 ? "plugin" : "basic") + " # Plugin OR Basic Permissions");
+            data.add("#For basic permission use only(No Plugin)");
+            data.add("UseNeedOP="+String.valueOf(useNeedOP));
+            data.add("CreateNeedOP="+String.valueOf(createNeedOP));
+            data.add("GlobalNeedOP="+String.valueOf(globalNeedOP));
+            data.add("AdminNeedOP="+String.valueOf(adminNeedOP));
+            data.add("#These next lines can be commented out with a # to disable the permission");
 
+            data.add((superNeedOP == -1 ? "#":"")+"superNeedOP="+String.valueOf(superNeedOP==1));
+            data.add((superGlobalNeedOP == -1 ? "#":"")+"superGlobalNeedOP="+(superGlobalNeedOP == -1 ? "true":String.valueOf(superGlobalNeedOP==1)));
+            data.add((freeNeedOP == -1 ? "#":"")+"freeNeedOP="+String.valueOf(freeNeedOP==1));
+            saveData(data, properties);
+        }
+    }
     protected boolean checkPermissions(Player player, String node, boolean needOp)
     {
         if(player == null)
             return true;
-        if (ItemCommands.Permissions == null || this.permissions == 1) {
+        else if(ItemCommands.Permissions == null || this.permissions == 1) {
             return (player.isOp() && needOp) || !needOp;
         }
         else {
             return ItemCommands.Permissions.has(player, node);
         }
     }
-    public String rspace(String s, char n, int len)
+    protected boolean checkPermissions(Player player, String node, int needOp)
+    {
+        if(player == null)
+            return true;
+        else if(ItemCommands.Permissions == null || this.permissions == 1) {
+            if(needOp < 0)
+                return false;
+            return (player.isOp() && needOp==1) || needOp==0;
+        }
+        else {
+            return ItemCommands.Permissions.has(player, node);
+        }
+    }
+    public String rspace(String s, String n, int len)
     {
         for(int i = s.length(); i < len; i++)
             s = s + n;
         return s;
     }
-    public String lspace(String s, char n, int len)
+    public String lspace(String s, String n, int len)
     {
         for(int i = s.length(); i < len; i++)
             s = n + s;
@@ -574,64 +714,141 @@ public class ItemCommands extends JavaPlugin {
     }
     void showHelp(Player player){
         int i = 0;
-        Dictionary<String, ICommand> dict = getDict(player);
-        int bindto = dict.get("bindto").click;
-        String sbindto = bindto == 0 ? "Item" : "Slot";
-        String key = "";
-        if(bindto == 1)
-            key = String.valueOf(player.getInventory().getHeldItemSlot());
-        else
-            key = String.valueOf(player.getItemInHand().getTypeId()) + ":" + String.valueOf(player.getItemInHand().getDurability());
-        ICommand cmd = dict.get(key);
-        sendMessage(player, ChatColor.GOLD + "Item Commands");
-        sendMessage(player, infoc + "Commands are set "+(this.per == 1 ? "per player" : "globally") + " and Binded to "+sbindto+"s");
-        if(cmd != null)
-        {
-            String a = (cmd.click == 0 ? "right" : "left");
-            sendMessage(player, infoc + "Current Command: "+descc+cmd.cmd);
-            sendMessage(player, infoc + "Triggered by a " + a + " click, " + a + " click events are "+(cmd.clickevent == 1 ? "enabled" : "disable"));
-        }
-        if(checkPermissions(player, "ICmds.create", createNeedOP)){
-            sendMessage(player, cmdc + "Usage: /icmd add [command] "+descc+"#Add command to the selected "+sbindto);
-            sendMessage(player, cmdc + "/icmd remove "+descc+"#Remove command from the selected "+sbindto);
-            sendMessage(player, cmdc + "/icmd click [left l|right r] "+descc+"#Change trigger of the selected "+sbindto);
-            sendMessage(player, cmdc + "/icmd clickevent [on t| off f] "+descc+"#Change whether the normal click functionality is performed");
-            i++;
-        }
-        if((per == 0 && checkPermissions(player, "ICmds.create", createNeedOP)) || (per == 1 && checkPermissions(player, "ICmds.use", useNeedOP))) {
-            sendMessage(player, cmdc + "/icmd bindto [item i|slot s] "+descc+"#Binds commands to slots or items");
+        if(checkPermissions(player, "ICmds.create", createNeedOP)) {
+            sendMessage(player, cmdc + "Usage: /icmd add [-i item|-s slot] [flags] [command] "+descc+"#Add command");
+            sendMessage(player, cmdc + "/icmd remove [id] "+descc+"#Remove command by ID");
+            sendMessage(player, cmdc + "/icmd change [id] <flags> <command> "+descc+"#Change properties of IDs command");
+            sendMessage(player, cmdc + "/icmd swap [id #1] [id #2] "+descc+"#Swap commands by ID");
             i++;}
         if(checkPermissions(player, "ICmds.use", useNeedOP)){
-            sendMessage(player, cmdc + "/icmd list "+descc+"#List commands available to you");
+            sendMessage(player, cmdc + "/icmd list <-i item|-s slot> <-g global> "+descc+"#List commands available");
             i++;}
         if(checkPermissions(player, "ICmds.admin", adminNeedOP)){
-            sendMessage(player, cmdc + "/icmd per [player pl|global gl] "+descc+"#Set commands globally or per player");
             sendMessage(player, cmdc + "/icmd reload");
             i++;}
         if(i == 0)
             sendMessage(player, cmdc + "No Permissions to use ItemCommands");
     }
-    Dictionary<String, ICommand> getDict(Player player)
+    public Dictionary<String, ICommands> getDict(String player, String key)
     {
-        Dictionary<String, ICommand> dict = null;
-        String i = this.per == 1 ? player.getName() : "";
-        if((dict=players.get(i)) == null){
-            players.put(i, dict=new Hashtable<String, ICommand>());
-            dict.put("bindto", new ICommand("", keybindings, 0));
-            dict.put("click", new ICommand("", bclick, 0));
+        ICommands cmd = null;
+        Dictionary<String, ICommands> dict = null;
+        if((dict=players.get(player)) == null){
+            players.put(player, dict=new Hashtable<String, ICommands>());
+        }
+        cmd = dict.get(key);
+        if(cmd == null)
+        {
+            cmd=new ICommands(this);
+            cmd.click = bclick;
+            cmd.bindto = keybindings;
+            dict.put(key, cmd);
         }
         return dict;
     }
-    Dictionary<String, ICommand> getDict(String player)
+    public ICommands findByKey(String player, String key)
     {
-        Dictionary<String, ICommand> dict = null;
-        String i = this.per == 1 ? player : "";
-        if((dict=players.get(i)) == null){
-            players.put(i, dict=new Hashtable<String, ICommand>());
-            dict.put("bindto", new ICommand("", keybindings, 0));
-            dict.put("click", new ICommand("", bclick, 0));
+        ICommands cmd = null;
+        Dictionary<String, ICommands> dict = null;
+        if((dict=players.get(player)) == null){
+            players.put(player, dict=new Hashtable<String, ICommands>());
         }
-        return dict;
+        cmd = dict.get(key);
+        if(cmd == null)
+        {
+            cmd=new ICommands(this);
+            cmd.click = bclick;
+            cmd.bindto = keybindings;
+            dict.put(key, cmd);
+        }
+        return cmd;
+    }
+    public int putDict(String player, String key, ICommand i)
+    {
+        Dictionary<String, ICommands> cmds = getDict(player, key);
+        int id = cmds.get(key).putDict(i);
+        players.put(player, cmds);
+        return id;
+
+    }
+    public ICommand findByID(int id)
+    {
+        ArrayList<Integer> data = new ArrayList<Integer>();
+        Enumeration<Dictionary<String, ICommands>> dict = players.elements();
+        for (;dict.hasMoreElements();)
+        {
+            Dictionary<String, ICommands> values = dict.nextElement();
+            Enumeration<ICommands> elements = values.elements();
+            for (;elements.hasMoreElements();)
+            {
+                ICommands cmds = elements.nextElement();
+                ICommand cmd = null;
+                if((cmd = cmds.findByID(id)) != null)
+                    return cmd;
+            }
+        }
+        return null;
+    }
+    public int findNextID(String player)
+    {
+        Integer[] iDs = getIDs(player);
+        for(int i = 1; i <= iDs.length; i++)
+        {
+            if(iDs[i-1] != i)
+                return i;
+        }
+        return iDs.length+1;
+    }
+    public Integer[] getIDs(String player)
+    {
+        ArrayList<Integer> data = new ArrayList<Integer>();
+        Dictionary<String, ICommands> get = players.get(player);
+        if(get == null)
+            players.put(player, get=new Hashtable<String, ICommands>());
+        Enumeration<ICommands> cmdsl = get.elements();
+        for (;cmdsl.hasMoreElements();)
+        {
+            ICommands cmds = cmdsl.nextElement();
+            Integer[] iDList = cmds.getIDList();
+            data.addAll(Arrays.asList(iDList));
+        }
+        Collections.sort(data);
+        Integer[] a = new Integer[data.size()];
+        for(int i = 0; i < data.size(); i++) {
+            a[i] = data.get(i);
+            i++;
+        }
+        return data.toArray(a);
+    }
+    ICommands getICmdsByID(Player player, int id, boolean global){
+        int bindto = 1;
+        String[] keys = new String[2];
+        ItemStack is = player.getItemInHand();
+        keys[0] = String.valueOf(is.getTypeId()) + ":" + String.valueOf(is.getDurability());
+        keys[1] = String.valueOf(player.getInventory().getHeldItemSlot()+1);
+        ICommands cmdt = getDict(player.getName(), keys[bindto]).get(keys[bindto]);
+        ICommand cmd = null;
+        if (cmdt != null)
+            cmd = cmdt.findByID(id);
+        if(cmd == null)
+        {
+            cmdt = getDict(player.getName(), keys[1-bindto]).get(keys[1-bindto]);
+            if(cmdt != null)
+                cmd = cmdt.findByID(id);
+            if(cmd == null)
+            {
+                cmdt = getDict("", keys[bindto]).get(keys[bindto]);
+                if(cmdt != null)
+                    cmd = cmdt.findByID(id);
+                if(cmd == null)
+                {
+                    cmdt = getDict("", keys[1-bindto]).get(keys[1-bindto]);
+                    if(cmdt != null)
+                        cmd = cmdt.findByID(id);
+                }
+            }
+        }
+        return cmdt;
     }
     void sendMessage(Player player, String s)
     {
@@ -639,11 +856,173 @@ public class ItemCommands extends JavaPlugin {
             player.sendMessage(s);
         else
         {
-            s = s.replaceAll(cmdc.toString(), "");
-            s = s.replaceAll(descc.toString(), "");
-            s = s.replaceAll(errc.toString(), "");
-            s = s.replaceAll(infoc.toString(), "");
-            System.out.println(s);
+            System.out.println(ChatColor.stripColor(s));
         }
+    }
+    protected String stringReplacer(String str, Player player, Block block)
+    {
+        if(block != null)
+        {
+            str = str.replaceAll("<bx>", String.valueOf(block.getX()));
+            str = str.replaceAll("<by>", String.valueOf(block.getY()));
+            str = str.replaceAll("<bz>", String.valueOf(block.getZ()));
+            str = str.replaceAll("<blight>", String.valueOf(block.getLightLevel()));
+            str = str.replaceAll("<btype>", String.valueOf(block.getTypeId()));
+            str = str.replaceAll("<bdata>", String.valueOf(block.getData()));
+            str = str.replaceAll("<bname>", block.getType().name());
+        }
+        else
+        {
+            str = str.replaceAll("<bx>", "");
+            str = str.replaceAll("<by>", "");
+            str = str.replaceAll("<bz>", "");
+            str = str.replaceAll("<blight>", "");
+            str = str.replaceAll("<btype>", "");
+            str = str.replaceAll("<bdata>", "");
+            str = str.replaceAll("<bname>", "");
+        }
+        if(player != null)
+        {
+            Location location = player.getLocation();
+            str = str.replaceAll("<x>", String.valueOf(location.getX()));
+            str = str.replaceAll("<y>", String.valueOf(location.getY()));
+            str = str.replaceAll("<z>", String.valueOf(location.getZ()));
+            str = str.replaceAll("<name>", String.valueOf(player.getDisplayName()));
+            str = str.replaceAll("<ip>", String.valueOf(player.getAddress().getAddress().toString()));
+        }
+        Server server = getServer();
+        if(server != null)
+        {
+            str = str.replaceAll("<players>", listToString(server.getOnlinePlayers()));
+            str = str.replaceAll("<sname>", server.getServerName());
+            str = str.replaceAll("<sip>", server.getIp());
+            str = str.replaceAll("<sversion>", server.getVersion());
+        }
+        Pattern p = Pattern.compile("&([0-9]{1,2})");
+        Matcher m = p.matcher(str);
+        while(m.find())
+            str = m.replaceAll(ChatColor.getByCode(Integer.parseInt(m.group(1))).toString());
+        return str;
+    }
+    protected String listToString(Object[] o)
+    {
+        String c = "";
+        for(int i = 0; i < o.length; i++)
+        {
+            c += o[i] + (i != o.length-1 ? ", " : "");
+        }
+        return c;
+    }
+    protected Double getVersion(String str, Double version)
+    {
+        if(version == null)
+        {
+            int e = str.indexOf("#");
+            if(e != -1)
+                str = str.substring(0, e);
+            if(!str.trim().isEmpty())
+            {
+                String[] s = str.split(" ");
+                String cmd2 = "";
+                for(int i = 2; i < s.length; i++)
+                    cmd2 += (i == 2?"":" ") + s[i];
+                try{
+                Integer.parseInt(cmd2.substring(0, 6));
+                    version = 1.11d;
+                }catch(NumberFormatException e2){
+                try{
+                    Integer.parseInt(cmd2.substring(0, 2));
+                    version = 1.02d;
+                }catch(NumberFormatException e3){
+                try{
+                    Integer.parseInt(cmd2.substring(0, 1));
+                    version = 1.0d;
+                }catch(NumberFormatException e4){}}}
+            }
+        }
+        double currentversion = Double.parseDouble(getDescription().getVersion());
+        if(version != null && version < currentversion)
+        {
+            updatePref(version);
+            if(version != 0)
+            {
+                updateDB(version);
+                System.out.println("Item Commands: Updated from v"+version.toString()+" to v"+currentversion);
+                version = currentversion;
+            }
+        }
+        return version;
+    }
+    void updatePref(Double currentVersion)
+    {
+        savePref();
+    }
+    void updateDB(Double currentVersion)
+    {
+        ArrayList<String> data = readData(database, false);
+        if(data != null)
+        {
+            players = new Hashtable<String, Dictionary<String, ICommands>>();
+            for(int i = 0; i < data.size(); i++)
+            {
+                data.set(i, updateLine(data.get(i), currentVersion));
+            }
+            saveData(data, database);
+            players = new Hashtable<String, Dictionary<String, ICommands>>();
+            readDB(false);
+        }
+    }
+    String updateLine(String line, Double currentVersion)
+    {
+        int click = -1;
+        int clickevent = 0;
+        int id = -1;
+        String cmd = "";
+        String name = "";
+        String key = "";
+        ArrayList<Item> consume = new ArrayList<Item>();
+        if(currentVersion < Double.parseDouble(this.getDescription().getVersion()))
+        {
+            int e = line.indexOf("#");
+            if(e != -1)
+                line = line.substring(0, e);
+            if(!line.trim().isEmpty())
+            {
+                String[] s = line.split(" ");
+                String cmd2 = "";
+                for(int i = 2; i < s.length; i++)
+                    cmd2 += (i == 2?"":" ") + s[i];
+                cmd = cmd.trim();
+                name = s[0].replaceAll("&+", " ");
+                key = s[1];
+                if(currentVersion >= 1.1d)
+                {
+                    ICommand icmd = null;
+                    try
+                    {
+                        icmd = new ICommand(name, key, cmd2, this);
+                    }
+                    catch(Exception e2){}
+                    putDict(name, key, icmd);
+                    return name.replaceAll(" ", "&+") + " " + key + " " + icmd.toString();
+                }
+                else
+                {
+                    id = findNextID(name);
+                    click = Character.getNumericValue(cmd2.charAt(0));
+                    if(currentVersion > 1.0d)
+                    {
+                        clickevent = Character.getNumericValue(cmd2.charAt(1));
+                        cmd = cmd2.substring(2);
+                    }
+                    else
+                        cmd = cmd2.substring(1);
+                    ICommand icmd = new ICommand(name, key, id, cmd, click, clickevent, consume, this);
+                    putDict(name, key, icmd);
+                    return name.replaceAll(" ", "&+") + " " + key + " " + icmd.toString();
+                }
+            }
+        }
+        return line;
     }
 }

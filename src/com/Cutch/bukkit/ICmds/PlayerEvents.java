@@ -1,6 +1,9 @@
 package com.Cutch.bukkit.ICmds;
 
-import java.util.Dictionary;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Iterator;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
 import org.bukkit.ChatColor;
@@ -9,6 +12,9 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerListener;
 import org.bukkit.inventory.ItemStack;
+import com.nijiko.coelho.iConomy.iConomy;
+import com.nijiko.coelho.iConomy.system.Account;
+import org.bukkit.inventory.PlayerInventory;
 
 public class PlayerEvents extends PlayerListener {
     private final ItemCommands plugin;
@@ -17,41 +23,152 @@ public class PlayerEvents extends PlayerListener {
     }
     @Override
     public void onPlayerInteract(PlayerInteractEvent event) {
-        Player player = event.getPlayer();
+        ICPlayer player = new ICPlayer(event.getPlayer());
         if(plugin.checkPermissions(player, "ICmds.use", plugin.useNeedOP))
         {
-            Dictionary<String, ICommand> dict = plugin.getDict(player);
-            ItemStack i = player.getItemInHand();
-            String[] keys = new String[2];
-            int bindto = dict.get("bindto").click;
-            keys[0] = String.valueOf(i.getTypeId()) + ":" + String.valueOf(i.getDurability());
-            keys[1] = String.valueOf(player.getInventory().getHeldItemSlot());
-            ICommand cmd = dict.get(keys[bindto]);
-            if (cmd == null)
-                cmd = dict.get(keys[1-bindto]);
-            if (cmd != null)  {
-                if((cmd.click == 0 && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) ||
-                (cmd.click == 1 && (event.getAction() == Action.LEFT_CLICK_AIR || event.getAction() == Action.LEFT_CLICK_BLOCK)))
-                {
-                    if(cmd.cmd.startsWith("/"))
+            int click = -1;
+            if(event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)
+                click = 0;
+            else if(event.getAction() == Action.LEFT_CLICK_AIR || event.getAction() == Action.LEFT_CLICK_BLOCK)
+                click = 1;
+            if(click != -1)
+            {
+                ItemStack i = player.getItemInHand();
+                String[] keys = new String[2];
+                int bindto = 1;
+                keys[0] = String.valueOf(i.getTypeId()) + ":" + String.valueOf(i.getDurability());
+                keys[1] = String.valueOf(player.getInventory().getHeldItemSlot()+1);
+                boolean global = false;
+                ICommands cmds = plugin.getDict(player.getName(), keys[bindto]).get(keys[bindto]);
+                if (!containsCommand(cmds.getElements(), click))
+                    cmds = plugin.getDict(player.getName(), keys[1-bindto]).get(keys[1-bindto]);
+                if (!containsCommand(cmds.getElements(), click)){
+                    global = true;
+                    cmds = plugin.getDict("", keys[bindto]).get(keys[bindto]);}
+                if (!containsCommand(cmds.getElements(), click))
+                    cmds = plugin.getDict("", keys[1-bindto]).get(keys[1-bindto]);
+                if (containsCommand(cmds.getElements(), click)) {
+                    Integer[] ids = cmds.getIDList();
+                    for(Integer id : ids)
                     {
-                        String[] bcmd = cmd.cmd.split(" ");
-                        String[] args = new String[bcmd.length - 1];
-                        for(int i2 = 1; i2 < bcmd.length; i2++)
-                            args[i2-1] = bcmd[i2];
-                        PluginCommand p = plugin.getServer().getPluginCommand(bcmd[0].replaceFirst("/", ""));
-                        if(p != null)
-                            p.execute(player, bcmd[0].replaceFirst("/", ""), args);
+                        ICommand cmd = cmds.findByID(id);
+                        if(cmd != null && cmd.click == click)
+                        {
+                            String item = "";
+                            if((item = checkReagents(player, cmd.consume)).isEmpty())
+                            {
+                                consume(player, cmd.consume);
+                                String cmdStr = plugin.stringReplacer(cmd.cmd, player, null);
+                                if(cmdStr.startsWith("/"))
+                                {
+                                    String[] bcmd = cmdStr.split(" ");
+                                    String[] args = new String[bcmd.length - 1];
+                                    for(int i2 = 1; i2 < bcmd.length; i2++)
+                                        args[i2-1] = bcmd[i2];
+                                    PluginCommand p = plugin.getServer().getPluginCommand(bcmd[0].replaceFirst("/", ""));
+                                    boolean p1 = plugin.checkPermissions(player, "ICmds.super", plugin.superNeedOP);
+                                    boolean p2 = plugin.checkPermissions(player, "ICmds.super.global", plugin.superGlobalNeedOP);
+                                    if(p1 || (p2 && global))
+                                    {
+                                        if(ItemCommands.Permissions == null || plugin.permissions == 1)
+                                            player.addSuperAccess();
+                                        else
+                                            plugin.hookPermissionHandler.addSuperAccess(player.getName());
+                                    }
+                                    if(p != null)
+                                        p.execute(player, bcmd[0].replaceFirst("/", ""), args);
+                                    if(p1 || (p2 && global))
+                                    {
+                                        if(ItemCommands.Permissions == null || plugin.permissions == 1)
+                                            player.removeSuperAccess();
+                                        else
+                                            plugin.hookPermissionHandler.removeSuperAccess(player.getName());
+                                    }
+                                }
+                                else
+                                    player.sendMessage(ChatColor.BLUE+cmdStr);
+                                event.setCancelled(cmd.clickevent == 0);
+                                if(cmd.clickevent == 1)
+                                    event.setUseItemInHand(Result.ALLOW);
+                                else
+                                    event.setUseItemInHand(Result.DENY);
+                            }
+                        }
                     }
-                    else
-                        player.sendMessage(ChatColor.BLUE+cmd.cmd);
-                    event.setCancelled(cmd.clickevent == 0);
-                    if(cmd.clickevent == 1)
-                        event.setUseItemInHand(Result.ALLOW);
-                    else
-                        event.setUseItemInHand(Result.DENY);
                 }
             }
         }
+    }
+    boolean containsCommand(Enumeration<ICommand> elements, int click)
+    {
+        while(elements.hasMoreElements())
+        {
+            ICommand cmd = elements.nextElement();
+            if(cmd.click == click)
+                return true;
+        }
+        return false;
+    }
+    String checkReagents(Player player, ArrayList<Item> list)
+    {
+        String name = "";
+        for(Item item : list)
+        {
+            if(item.id == -2)
+            {
+                if(item.amount < 0 && !plugin.checkPermissions(player, "ICmd.Free", plugin.freeNeedOP)){
+                    Account account = iConomy.getBank().getAccount(player.getName());
+                    if(!account.hasEnough(Math.abs(item.amount)))
+                        return "$"+Math.abs(item.amount);
+//                    Account account = iConomy.getAccount(player.getName());
+//                    if(!account.getHoldings().hasEnough(Math.abs(item.amount)))
+//                        return "$"+Math.abs(item.amount);
+                }
+            } else {
+                
+                if(item.amount < 0)
+                    if(!player.getInventory().contains(item.id, Math.abs(item.amount)))
+                        return item.getName();
+            }
+        }
+        return name;
+    }
+    void consume(Player player, ArrayList<Item> list)
+    {
+        for(Item item : list)
+        {
+            if(item.id == -2)
+            {
+                Account account = iConomy.getBank().getAccount(player.getName());
+                if(item.amount < 0 && !plugin.checkPermissions(player, "ICmd.Free", plugin.adminNeedOP)){
+                    int abs = Math.abs(item.amount);
+                    account.subtract(abs);
+                }
+                else if(item.amount > 0)
+                    account.add(item.amount);
+            } else {
+                PlayerInventory inventory = player.getInventory();
+                if(item.amount < 0)
+                {
+                    HashMap<Integer, ? extends ItemStack> all = inventory.all(item.id);
+                    Iterator<Integer> iterator = all.keySet().iterator();
+                    while(iterator.hasNext())
+                    {
+                        int i = iterator.next();
+                        ItemStack get = all.get(i);
+                        int amount = get.getAmount();
+                        if(amount+item.amount >= 0)
+                        {
+                            get.setAmount(amount+item.amount);
+                            inventory.setItem(i, get);
+                            break;
+                        }
+                    }
+                }
+                else
+                    inventory.addItem(new ItemStack(item.id, item.amount, (short)item.damage));
+            }
+        }
+        player.updateInventory();
     }
 }

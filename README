@@ -1,20 +1,4 @@
-Features
-    Works with Permissions 2.7 and Basic Customizable OP support
-    Bind a command to a item/slot in your hand
-    Use left and right mouse buttons to triggers commands
-    Allow a Global control/command list or Player
-    Can also send a message to self instead of a command
+ItemCommands - Command Hotkeys, Using Inventory
 
-/ic 				#Shows this help in game with only the commands you can use
-ICmds.create
-/ic add [command] 		#Add command to the selected item
-/ic remove 			#Remove command from the selected item
-/ic click [left l|right r] 	#Change trigger of the selected item
-ICmds.create(Globally) OR ICmds.use(Per Player)
-/ic bindto [item i|slot s] 	#Binds commands to slots or items
-ICmds.use
-Allows for usage
-/ic list 			#List commands available to you
-ICmds.admin
-/ic per [player pl|global gl] 	#Set commands globally or per player
-/ic reload
+Description
+Allows a user or admin to set commands that can be triggered when left/right clicking with the selected item or slot. You also have the choice to set items or money to be consumed, or given to a player. It also has the ability to run commands a user does not have permissions for.
