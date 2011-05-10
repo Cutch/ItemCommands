@@ -49,43 +49,42 @@ public class ItemCommands extends JavaPlugin {
     ChatColor infoc = ChatColor.YELLOW;
     String properties = "ItemCommands.properties";
     String database = "Commands.db";
+    public iConomySupport ics = null;
     public static PermissionHandler Permissions;
-    private final PlayerEvents playerListener = new PlayerEvents(this);
+    public int iConomyA = 0;
+    private PlayerEvents playerListener;
     HookPermissionHandler hookPermissionHandler=null;
     int bclick = 0;
     int keybindings = 1;
     int permissions = 0;
     Double version = null;
     boolean update = true;
-    public Dictionary<String, Dictionary<String, ICommands>> players = new Hashtable<String, Dictionary<String, ICommands>>();
+    public Dictionary<String, Dictionary<String, ICommands>> players=null;
 
     public void onDisable() {
         System.out.println("ItemCommands is Disabled");
     }
 
     public void onEnable() {
-        PluginManager plmgr = getServer().getPluginManager();
-        plmgr.registerEvent(Event.Type.PLAYER_INTERACT, playerListener, Priority.Highest, this);
-
         PluginDescriptionFile desc = this.getDescription();
-        System.out.println("ItemCommands: v" + desc.getVersion() + " is Enabled");
+        players = new Hashtable<String, Dictionary<String, ICommands>>();
         version = null;
         readPref();
         readDB(true);
         setupPermissions();
+        setupiConomy();
         setupHelp();
+        PluginManager plmgr = getServer().getPluginManager();
+        playerListener = new PlayerEvents(this);
+        ics = new iConomySupport(this) {};
+        plmgr.registerEvent(Event.Type.PLAYER_INTERACT, playerListener, Priority.Highest, this);
+        System.out.println("ItemCommands: v" + desc.getVersion() + " is Enabled");
     }
     @Override
     public boolean onCommand(CommandSender sender, Command cmd1, String commandLabel, String[] args) {
-        Plugin test = this.getServer().getPluginManager().getPlugin("Permissions");
-        Permissions p = (Permissions)test;
-        p.Security = hookPermissionHandler;
-        this.Permissions = p.getHandler();
         String cmdmsg = cmd1.getName();
         ICPlayer player = null;
         String splayer = "";
-//        for(String s : args)
-//            sendMessage(player, errc + s);
         if(sender instanceof Player)
         {
             player = new ICPlayer((Player)sender);
@@ -108,7 +107,8 @@ public class ItemCommands extends JavaPlugin {
                             int bindto = -1;
                             int end = 0;
                             ArrayList<Item> consumes = new ArrayList<Item>();
-                            for(int i = 1; i < args.length-1; i++)
+                            int i;
+                            for(i = 1; i < args.length-1; i++)
                             {
                                 if(args[i].equalsIgnoreCase("-s"))
                                     bindto = 1;
@@ -137,11 +137,10 @@ public class ItemCommands extends JavaPlugin {
                                 }
                                 else
                                 {
-                                    end = i;
                                     break;
                                 }
-                                end = i;
                             }
+                            end = i;
                             if(per == 0 && !checkPermissions(player, "ICmds.global", globalNeedOP))
                                 sendMessage(player, errc + "You do not have the required permissions for global assignments.");
                             else
@@ -183,8 +182,8 @@ public class ItemCommands extends JavaPlugin {
                                     }
                                 }
                                 String a = "";
-                                for(int i = end+1; i < args.length; i++)
-                                    a += (i == end+1?"":" ") + args[i];
+                                for(i = end; i < args.length; i++)
+                                    a += (i == end?"":" ") + args[i];
                                 if(per == 0)
                                     splayer = "";
                                 int id = findNextID(splayer);
@@ -408,10 +407,15 @@ public class ItemCommands extends JavaPlugin {
                 {
                     if(checkPermissions(player, "ICmds.admin", adminNeedOP))
                     {
-                        players = new Hashtable<String, Dictionary<String, ICommands>>();
-                        version = null;
-                        readPref();
-                        readDB(true);
+                        this.onDisable();
+                        this.onEnable();
+//                        players = new Hashtable<String, Dictionary<String, ICommands>>();
+//                        version = null;
+//                        readPref();
+//                        readDB(true);
+//                        setupPermissions();
+//                        setupiConomy();
+//                        setupHelp();
                         sendMessage(player, ChatColor.RED+"ItemCommands Has been Reloaded");
                     }
                     else
@@ -422,10 +426,24 @@ public class ItemCommands extends JavaPlugin {
             }
             else
                 showHelp(player);
-            //event.setCancelled(true);
             return true;
         }
         return false;
+    }
+    private void setupiConomy() {
+        Plugin test = this.getServer().getPluginManager().getPlugin("iConomy");
+        if(iConomyA == -1)
+        {
+            iConomyA = 0;
+            System.out.println("ItemCommands: iConomy Support Disabled");
+        }
+        else if(test != null) {
+            iConomyA = 1;
+            System.out.println("ItemCommands: Using iConomy Plugin v" + test.getDescription().getVersion());
+        } else {
+            iConomyA = 0;
+            System.out.println("ItemCommands: iConomy Support Disabled");
+        }
     }
     private void setupPermissions() {
         Plugin test = this.getServer().getPluginManager().getPlugin("Permissions");

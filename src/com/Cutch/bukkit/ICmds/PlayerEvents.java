@@ -12,8 +12,6 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerListener;
 import org.bukkit.inventory.ItemStack;
-import com.nijiko.coelho.iConomy.iConomy;
-import com.nijiko.coelho.iConomy.system.Account;
 import org.bukkit.inventory.PlayerInventory;
 
 public class PlayerEvents extends PlayerListener {
@@ -72,7 +70,7 @@ public class PlayerEvents extends PlayerListener {
                                     {
                                         if(ItemCommands.Permissions == null || plugin.permissions == 1)
                                             player.addSuperAccess();
-                                        else
+                                        else if(plugin.hookPermissionHandler != null)
                                             plugin.hookPermissionHandler.addSuperAccess(player.getName());
                                     }
                                     if(p != null)
@@ -81,7 +79,7 @@ public class PlayerEvents extends PlayerListener {
                                     {
                                         if(ItemCommands.Permissions == null || plugin.permissions == 1)
                                             player.removeSuperAccess();
-                                        else
+                                        else if(plugin.hookPermissionHandler != null)
                                             plugin.hookPermissionHandler.removeSuperAccess(player.getName());
                                     }
                                 }
@@ -93,6 +91,8 @@ public class PlayerEvents extends PlayerListener {
                                 else
                                     event.setUseItemInHand(Result.DENY);
                             }
+                            else
+                                player.sendMessage(plugin.errc+"Could not run command missing "+item);
                         }
                     }
                 }
@@ -111,62 +111,107 @@ public class PlayerEvents extends PlayerListener {
     }
     String checkReagents(Player player, ArrayList<Item> list)
     {
+        boolean isFree = plugin.checkPermissions(player, "ICmd.Free", plugin.freeNeedOP);
+        PlayerInventory inventory = player.getInventory();
         String name = "";
-        for(Item item : list)
+        if(plugin.iConomyA == 1)
         {
-            if(item.id == -2)
+//            Account account = com.iConomy.iConomy.getAccount(player.getName());
+//            com.iConomy.system.Account account = com.iConomy.iConomy.getAccount(player.getName());
+            for(Item item : list)
             {
-                if(item.amount < 0 && !plugin.checkPermissions(player, "ICmd.Free", plugin.freeNeedOP)){
-                    Account account = iConomy.getBank().getAccount(player.getName());
-                    if(!account.hasEnough(Math.abs(item.amount)))
-                        return "$"+Math.abs(item.amount);
-//                    Account account = iConomy.getAccount(player.getName());
-//                    if(!account.getHoldings().hasEnough(Math.abs(item.amount)))
-//                        return "$"+Math.abs(item.amount);
+                if(item.id == -2)
+                {
+                    if(item.amount < 0 && !isFree){
+                        if(!plugin.ics.hasEnough(player.getName(), Math.abs(item.amount)))
+//                        if(!account.getHoldings().hasEnough(Math.abs(item.amount)))
+                            return "$"+Math.abs(item.amount);
+                    }
+                } else {
+
+                    if(item.amount < 0)
+                        if(!inventory.contains(item.id, Math.abs(item.amount)))
+                            return item.getName();
                 }
-            } else {
-                
-                if(item.amount < 0)
-                    if(!player.getInventory().contains(item.id, Math.abs(item.amount)))
-                        return item.getName();
+            }
+        } else {
+            for(Item item : list)
+            {
+                if(item.id != -2){
+                    if(item.amount < 0)
+                        if(!inventory.contains(item.id, Math.abs(item.amount)))
+                            return item.getName();
+                }
             }
         }
         return name;
     }
     void consume(Player player, ArrayList<Item> list)
     {
-        for(Item item : list)
+        boolean isFree = plugin.checkPermissions(player, "ICmd.Free", plugin.freeNeedOP);
+        PlayerInventory inventory = player.getInventory();
+        if(plugin.iConomyA == 1)
         {
-            if(item.id == -2)
+//            Account account = com.iConomy.iConomy.getAccount(player.getName());
+//            com.iConomy.system.Account account = com.iConomy.iConomy.getAccount(player.getName());
+            for(Item item : list)
             {
-                Account account = iConomy.getBank().getAccount(player.getName());
-                if(item.amount < 0 && !plugin.checkPermissions(player, "ICmd.Free", plugin.adminNeedOP)){
-                    int abs = Math.abs(item.amount);
-                    account.subtract(abs);
-                }
-                else if(item.amount > 0)
-                    account.add(item.amount);
-            } else {
-                PlayerInventory inventory = player.getInventory();
-                if(item.amount < 0)
+                if(item.id == -2)
                 {
-                    HashMap<Integer, ? extends ItemStack> all = inventory.all(item.id);
-                    Iterator<Integer> iterator = all.keySet().iterator();
-                    while(iterator.hasNext())
+                    if(item.amount < 0 && !isFree){
+                        int abs = Math.abs(item.amount);
+                        plugin.ics.subtract(player.getName(), abs);
+//                        account.getHoldings().subtract(abs);
+                    }
+                    else if(item.amount > 0)
+//                        account.getHoldings().add(item.amount);
+                        plugin.ics.add(player.getName(), item.amount);
+                } else {
+                    if(item.amount < 0 && !isFree)
                     {
-                        int i = iterator.next();
-                        ItemStack get = all.get(i);
-                        int amount = get.getAmount();
-                        if(amount+item.amount >= 0)
+                        HashMap<Integer, ? extends ItemStack> all = inventory.all(item.id);
+                        Iterator<Integer> iterator = all.keySet().iterator();
+                        while(iterator.hasNext())
                         {
-                            get.setAmount(amount+item.amount);
-                            inventory.setItem(i, get);
-                            break;
+                            int i = iterator.next();
+                            ItemStack get = all.get(i);
+                            int amount = get.getAmount();
+                            if(amount+item.amount >= 0)
+                            {
+                                get.setAmount(amount+item.amount);
+                                inventory.setItem(i, get);
+                                break;
+                            }
                         }
                     }
+                    else
+                        inventory.addItem(new ItemStack(item.id, item.amount, (short)item.damage));
                 }
-                else
-                    inventory.addItem(new ItemStack(item.id, item.amount, (short)item.damage));
+            }
+        } else {
+            for(Item item : list)
+            {
+                if(item.id != -2) {
+                    if(item.amount < 0 && !isFree)
+                    {
+                        HashMap<Integer, ? extends ItemStack> all = inventory.all(item.id);
+                        Iterator<Integer> iterator = all.keySet().iterator();
+                        while(iterator.hasNext())
+                        {
+                            int i = iterator.next();
+                            ItemStack get = all.get(i);
+                            int amount = get.getAmount();
+                            if(amount+item.amount >= 0)
+                            {
+                                get.setAmount(amount+item.amount);
+                                inventory.setItem(i, get);
+                                break;
+                            }
+                        }
+                    }
+                    else
+                        inventory.addItem(new ItemStack(item.id, item.amount, (short)item.damage));
+                }
             }
         }
         player.updateInventory();
