@@ -21,7 +21,7 @@ public class PlayerEvents extends PlayerListener {
     }
     @Override
     public void onPlayerInteract(PlayerInteractEvent event) {
-        ICPlayer player = new ICPlayer(event.getPlayer());
+        ICPlayer player = new ICPlayer(event.getPlayer()) {};
         if(plugin.checkPermissions(player, "ICmds.use", plugin.useNeedOP))
         {
             int click = -1;
@@ -50,7 +50,7 @@ public class PlayerEvents extends PlayerListener {
                     for(Integer id : ids)
                     {
                         ICommand cmd = cmds.findByID(id);
-                        if(cmd != null && cmd.click == click)
+                        if(cmd != null && cmd.click == click && cmd.canRunCommand())
                         {
                             String item = "";
                             if((item = checkReagents(player, cmd.consume)).isEmpty())
@@ -68,19 +68,17 @@ public class PlayerEvents extends PlayerListener {
                                     boolean p2 = plugin.checkPermissions(player, "ICmds.super.global", plugin.superGlobalNeedOP);
                                     if(p1 || (p2 && global))
                                     {
-                                        if(ItemCommands.Permissions == null || plugin.permissions == 1)
-                                            player.addSuperAccess();
-                                        else if(plugin.hookPermissionHandler != null)
-                                            plugin.hookPermissionHandler.addSuperAccess(player.getName());
+                                        player.addSuperAccess();
+                                        if(plugin.pms != null)
+                                            plugin.pms.addSuperAccess(player.getName());
                                     }
                                     if(p != null)
                                         p.execute(player, bcmd[0].replaceFirst("/", ""), args);
                                     if(p1 || (p2 && global))
                                     {
-                                        if(ItemCommands.Permissions == null || plugin.permissions == 1)
-                                            player.removeSuperAccess();
-                                        else if(plugin.hookPermissionHandler != null)
-                                            plugin.hookPermissionHandler.removeSuperAccess(player.getName());
+                                        player.removeSuperAccess();
+                                        if(plugin.pms != null)
+                                            plugin.pms.removeSuperAccess(player.getName());
                                     }
                                 }
                                 else
@@ -116,15 +114,12 @@ public class PlayerEvents extends PlayerListener {
         String name = "";
         if(plugin.iConomyA == 1)
         {
-//            Account account = com.iConomy.iConomy.getAccount(player.getName());
-//            com.iConomy.system.Account account = com.iConomy.iConomy.getAccount(player.getName());
             for(Item item : list)
             {
                 if(item.id == -2)
                 {
                     if(item.amount < 0 && !isFree){
                         if(!plugin.ics.hasEnough(player.getName(), Math.abs(item.amount)))
-//                        if(!account.getHoldings().hasEnough(Math.abs(item.amount)))
                             return "$"+Math.abs(item.amount);
                     }
                 } else {
@@ -152,8 +147,6 @@ public class PlayerEvents extends PlayerListener {
         PlayerInventory inventory = player.getInventory();
         if(plugin.iConomyA == 1)
         {
-//            Account account = com.iConomy.iConomy.getAccount(player.getName());
-//            com.iConomy.system.Account account = com.iConomy.iConomy.getAccount(player.getName());
             for(Item item : list)
             {
                 if(item.id == -2)
@@ -161,10 +154,8 @@ public class PlayerEvents extends PlayerListener {
                     if(item.amount < 0 && !isFree){
                         int abs = Math.abs(item.amount);
                         plugin.ics.subtract(player.getName(), abs);
-//                        account.getHoldings().subtract(abs);
                     }
                     else if(item.amount > 0)
-//                        account.getHoldings().add(item.amount);
                         plugin.ics.add(player.getName(), item.amount);
                 } else {
                     if(item.amount < 0 && !isFree)

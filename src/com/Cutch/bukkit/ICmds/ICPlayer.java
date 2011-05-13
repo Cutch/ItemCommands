@@ -20,7 +20,7 @@ import org.bukkit.entity.Vehicle;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.util.Vector;
-public class ICPlayer implements Player {
+public abstract class ICPlayer implements Player {
     Player player;
     public ICPlayer(Player player)
     {
@@ -350,5 +350,17 @@ public class ICPlayer implements Player {
 
     public void sendMessage(String string) {
         player.sendMessage(string);
+    }
+
+    public void playNote(Location lctn, byte b, byte b1) {
+        player.playNote(lctn, b, b1);
+    }
+
+    public void sendBlockChange(Location lctn, Material mtrl, byte b) {
+        player.sendBlockChange(lctn, mtrl, b);
+    }
+
+    public void sendBlockChange(Location lctn, int i, byte b) {
+        player.sendBlockChange(lctn, i, b);
     }
 }

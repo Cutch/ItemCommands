@@ -8,8 +8,6 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 
-import com.nijiko.permissions.PermissionHandler;
-import com.nijikokun.bukkit.Permissions.Permissions;
 import me.taylorkelly.help.Help;
 import org.bukkit.Location;
 import org.bukkit.Server;
@@ -41,7 +39,7 @@ public class ItemCommands extends JavaPlugin {
     public boolean globalNeedOP = true;
     public boolean adminNeedOP = true;
     public int superNeedOP = -1;
-    public int superGlobalNeedOP = 1;
+    public int superGlobalNeedOP = 0;
     public int freeNeedOP = -1;
     ChatColor cmdc = ChatColor.BLUE;
     ChatColor descc = ChatColor.AQUA;
@@ -50,13 +48,12 @@ public class ItemCommands extends JavaPlugin {
     String properties = "ItemCommands.properties";
     String database = "Commands.db";
     public iConomySupport ics = null;
-    public static PermissionHandler Permissions;
+    PermissionSupport pms = null;
     public int iConomyA = 0;
+    int permissionsType = 0;
     private PlayerEvents playerListener;
-    HookPermissionHandler hookPermissionHandler=null;
     int bclick = 0;
     int keybindings = 1;
-    int permissions = 0;
     Double version = null;
     boolean update = true;
     public Dictionary<String, Dictionary<String, ICommands>> players=null;
@@ -70,8 +67,15 @@ public class ItemCommands extends JavaPlugin {
         players = new Hashtable<String, Dictionary<String, ICommands>>();
         version = null;
         readPref();
+        try
+        {
+            pms = new PermissionSupport(this){};
+            permissionsType = pms.setupPermissions(permissionsType);
+        }catch(NoClassDefFoundError e){
+            permissionsType=1;
+            System.out.println("ItemCommands: Permission system not detected. Using Basic Permissions.");
+        }
         readDB(true);
-        setupPermissions();
         setupiConomy();
         setupHelp();
         PluginManager plmgr = getServer().getPluginManager();
@@ -87,7 +91,7 @@ public class ItemCommands extends JavaPlugin {
         String splayer = "";
         if(sender instanceof Player)
         {
-            player = new ICPlayer((Player)sender);
+            player = new ICPlayer((Player)sender) {};
             splayer = player.getName();
         }
         if(cmdmsg.equalsIgnoreCase("icmd"))
@@ -106,6 +110,7 @@ public class ItemCommands extends JavaPlugin {
                             int per = 1;
                             int bindto = -1;
                             int end = 0;
+                            double cooldown = 0;
                             ArrayList<Item> consumes = new ArrayList<Item>();
                             int i;
                             for(i = 1; i < args.length-1; i++)
@@ -114,6 +119,8 @@ public class ItemCommands extends JavaPlugin {
                                     bindto = 1;
                                 else if(args[i].equalsIgnoreCase("-i"))
                                     bindto = 0;
+                                else if(args[i].equalsIgnoreCase("-d"))
+                                    cooldown = parseTime(args[++i]);
                                 else if(args[i].equalsIgnoreCase("-r"))
                                     click = 0;
                                 else if(args[i].equalsIgnoreCase("-l"))
@@ -187,7 +194,7 @@ public class ItemCommands extends JavaPlugin {
                                 if(per == 0)
                                     splayer = "";
                                 int id = findNextID(splayer);
-                                ICommand cmd = new ICommand(splayer, key, id, a, click, clickevent, consumes, this);
+                                ICommand cmd = new ICommand(splayer, key, id, a, click, clickevent, cooldown, consumes, this);
                                 putDict(splayer, key, cmd);
                                 String pcmd = cmd.cmd;
                                 pcmd = pcmd.replaceFirst(":0", "");
@@ -266,6 +273,7 @@ public class ItemCommands extends JavaPlugin {
                             int bindto = -1;
                             int per = 1;
                             int end = 0;
+                            double cooldown = -1;
                             ArrayList<Item> consumes = new ArrayList<Item>();
                             int i;
                             for(i = 2; i < args.length; i+=1)
@@ -274,6 +282,8 @@ public class ItemCommands extends JavaPlugin {
                                     bindto = 1;
                                 else if(args[i].equalsIgnoreCase("-i"))
                                     bindto = 0;
+                                else if(args[i].equalsIgnoreCase("-d"))
+                                    cooldown = parseTime(args[++i]);
                                 else if(args[i].equalsIgnoreCase("-r"))
                                     click = 0;
                                 else if(args[i].equalsIgnoreCase("-l"))
@@ -302,57 +312,55 @@ public class ItemCommands extends JavaPlugin {
                             }
                             end = i;
 
+                            if(player == null && key.isEmpty())
+                            {
+                                sendMessage(player, cmdc + "Usage: /icmd change [id] <flags> <command> "+descc+"#Change flags by id");
+                                return true;
+                            }
                             if(per == 0)
                                 splayer = "";
                             ICommands cmds = getICmdsByID(player, id, per == 0);
                             ICommand cmd = cmds.findByID(id);
                             if(per == 0 && !checkPermissions(player, "ICmds.global", globalNeedOP))
                                 sendMessage(player, errc + "You do not have the required permissions for global assignments.");
-                            else
+                            else if(cmd != null)
                             {
-                                if(player == null && key.isEmpty())
-                                {
-                                    sendMessage(player, cmdc + "Usage: /icmd change [id] <flags> <command> "+descc+"#Change flags by id");
-                                    return true;
-                                }
                                 if(key.isEmpty())
                                     key = cmd.key;
-                                if(cmd != null)
-                                {
-                                    if(key.isEmpty())
-                                        key = cmd.key;
-                                    if(click == -1)
-                                        click = cmd.click;
-                                    if(clickevent == -1)
-                                        clickevent = cmd.clickevent;
-                                    if(bindto == -1)
-                                        bindto = cmd.bindto;
-                                    else
-                                    {
-                                        String[] keys = new String[2];
-                                        ItemStack is = player.getItemInHand();
-                                        keys[0] = String.valueOf(is.getTypeId()) + ":" + String.valueOf(is.getDurability());
-                                        keys[1] = String.valueOf(player.getInventory().getHeldItemSlot()+1);
-                                        cmd.key = keys[bindto];
-                                        cmds.remove(id);
-                                        putDict(splayer, key, cmd);
-                                    }
-                                    if(per == -1)
-                                        per = cmd.global;
-                                    String a = "";
-                                    for(i = end; i < args.length; i++)
-                                        a += (i == end?"":" ") + args[i];
-                                    cmd.click=click;
-                                    if(!a.isEmpty())
-                                        cmd.cmd = a;
-                                    cmd.consume = consumes;
-                                    cmd.clickevent = clickevent;
-                                    putDict(splayer, key, cmd);
-                                    saveDB();
-                                }
+                                if(click == -1)
+                                    click = cmd.click;
+                                if(clickevent == -1)
+                                    clickevent = cmd.clickevent;
+                                if(cooldown == -1)
+                                    cooldown = cmd.cooldown;
+                                if(bindto == -1)
+                                    bindto = cmd.bindto;
                                 else
-                                    sendMessage(player, errc + "ID " + args[1] + " not valid.");
+                                {
+                                    String[] keys = new String[2];
+                                    ItemStack is = player.getItemInHand();
+                                    keys[0] = String.valueOf(is.getTypeId()) + ":" + String.valueOf(is.getDurability());
+                                    keys[1] = String.valueOf(player.getInventory().getHeldItemSlot()+1);
+                                    cmd.key = keys[bindto];
+                                    cmds.remove(id);
+                                    putDict(splayer, key, cmd);
+                                }
+                                if(per == -1)
+                                    per = cmd.global;
+                                String a = "";
+                                for(i = end; i < args.length; i++)
+                                    a += (i == end?"":" ") + args[i];
+                                cmd.click=click;
+                                if(!a.isEmpty())
+                                    cmd.cmd = a;
+                                cmd.consume = consumes;
+                                cmd.clickevent = clickevent;
+                                cmd.cooldown = cooldown;
+                                putDict(splayer, key, cmd);
+                                saveDB();
                             }
+                            else
+                                sendMessage(player, errc + "ID " + args[1] + " not valid.");
                         }
                         else
                             sendMessage(player, errc + "You do not have the required permissions for this.");
@@ -409,13 +417,6 @@ public class ItemCommands extends JavaPlugin {
                     {
                         this.onDisable();
                         this.onEnable();
-//                        players = new Hashtable<String, Dictionary<String, ICommands>>();
-//                        version = null;
-//                        readPref();
-//                        readDB(true);
-//                        setupPermissions();
-//                        setupiConomy();
-//                        setupHelp();
                         sendMessage(player, ChatColor.RED+"ItemCommands Has been Reloaded");
                     }
                     else
@@ -443,23 +444,6 @@ public class ItemCommands extends JavaPlugin {
         } else {
             iConomyA = 0;
             System.out.println("ItemCommands: iConomy Support Disabled");
-        }
-    }
-    private void setupPermissions() {
-        Plugin test = this.getServer().getPluginManager().getPlugin("Permissions");
-        if (this.Permissions == null) {
-            if(permissions == 1)
-                System.out.println("ItemCommands: Using Basic Permissions");
-            else if(test != null) {
-                Permissions p = (Permissions)test;
-                hookPermissionHandler = new HookPermissionHandler(p);
-                p.Security = hookPermissionHandler;
-                this.Permissions = p.getHandler();
-                System.out.println("ItemCommands: Using Permissions Plugin v" + p.version);
-            } else {
-                permissions=1;
-                System.out.println("ItemCommands: Permission system not detected. Using Basic Permissions.");
-            }
         }
     }
     private void setupHelp()
@@ -555,7 +539,8 @@ public class ItemCommands extends JavaPlugin {
                 if(e != -1)
                     line = line.substring(0, e);
                 if(update)
-                    version = getVersion(line, version);
+                    if(getVersion(line))
+                        break;
                 if(!line.trim().isEmpty())
                 {
                     String[] s = line.split(" ");
@@ -563,19 +548,17 @@ public class ItemCommands extends JavaPlugin {
                     for(int i = 2; i < s.length; i++)
                         cmd2 += (i == 2?"":" ") + s[i];
                     String name = s[0].replaceAll("&+", " ");
-                    try
+//                    try
                     {
                         this.putDict(name, s[1], new ICommand(name, s[1], cmd2, this));
                     }
-                    catch(Exception e2)
-                    {
-                        System.out.println("Line "+i2+" could not be parsed");
-                    }
+//                    catch(Exception e2)
+//                    {
+//                        System.out.println("Line "+i2+" could not be parsed");
+//                    }
                 }
             }
         }
-        else
-            version = getVersion("", 0d);
     }
     void readPref()
     {
@@ -616,9 +599,9 @@ public class ItemCommands extends JavaPlugin {
                 else if(name.equalsIgnoreCase("permissionType"))
                 {
                     if(value.equalsIgnoreCase("plugin")){
-                        permissions = 0;}
+                        permissionsType = 0;}
                     else if(value.equalsIgnoreCase("basic")){
-                        permissions = 1;}
+                        permissionsType = 1;}
                     else
                         System.out.println("Error in ItemCommands.properties with permissionType on line #" + i);
                 }
@@ -680,17 +663,16 @@ public class ItemCommands extends JavaPlugin {
             ArrayList<String> data = new ArrayList<String>();
             data.add("Version="+this.getDescription().getVersion()+" #This is used to update the database and properties files");
             data.add("UpdateDB="+String.valueOf(update)+" #Setting this to false will disable version updates for the database, it will be usable but changes wont be saved");
-            data.add("PermissionType=" + (permissions == 0 ? "plugin" : "basic") + " # Plugin OR Basic Permissions");
+            data.add("PermissionType=" + (permissionsType == 0 ? "plugin" : "basic") + " # Plugin OR Basic Permissions");
             data.add("#For basic permission use only(No Plugin)");
             data.add("UseNeedOP="+String.valueOf(useNeedOP));
             data.add("CreateNeedOP="+String.valueOf(createNeedOP));
             data.add("GlobalNeedOP="+String.valueOf(globalNeedOP));
             data.add("AdminNeedOP="+String.valueOf(adminNeedOP));
             data.add("#These next lines can be commented out with a # to disable the permission");
-
-            data.add((superNeedOP == -1 ? "#":"")+"superNeedOP="+String.valueOf(superNeedOP==1));
-            data.add((superGlobalNeedOP == -1 ? "#":"")+"superGlobalNeedOP="+(superGlobalNeedOP == -1 ? "true":String.valueOf(superGlobalNeedOP==1)));
-            data.add((freeNeedOP == -1 ? "#":"")+"freeNeedOP="+String.valueOf(freeNeedOP==1));
+            data.add((superNeedOP == -1 ? "#":"")+"superNeedOP="+String.valueOf(!(superNeedOP==0)));
+            data.add((superGlobalNeedOP == -1 ? "#":"")+"superGlobalNeedOP="+String.valueOf(superGlobalNeedOP==1));
+            data.add((freeNeedOP == -1 ? "#":"")+"freeNeedOP="+String.valueOf(!(freeNeedOP==0)));
             saveData(data, properties);
         }
     }
@@ -698,24 +680,24 @@ public class ItemCommands extends JavaPlugin {
     {
         if(player == null)
             return true;
-        else if(ItemCommands.Permissions == null || this.permissions == 1) {
+        else if(permissionsType == 1) {
             return (player.isOp() && needOp) || !needOp;
         }
         else {
-            return ItemCommands.Permissions.has(player, node);
+            return pms.has(player, node);
         }
     }
     protected boolean checkPermissions(Player player, String node, int needOp)
     {
         if(player == null)
             return true;
-        else if(ItemCommands.Permissions == null || this.permissions == 1) {
+        else if(permissionsType == 1) {
             if(needOp < 0)
                 return false;
             return (player.isOp() && needOp==1) || needOp==0;
         }
         else {
-            return ItemCommands.Permissions.has(player, node);
+            return pms.has(player, node);
         }
     }
     public String rspace(String s, String n, int len)
@@ -931,9 +913,10 @@ public class ItemCommands extends JavaPlugin {
         }
         return c;
     }
-    protected Double getVersion(String str, Double version)
+    protected boolean getVersion(String str)
     {
-        if(version == null)
+        Double oldversion = this.version;
+        if(this.version == null)
         {
             int e = str.indexOf("#");
             if(e != -1)
@@ -945,33 +928,41 @@ public class ItemCommands extends JavaPlugin {
                 for(int i = 2; i < s.length; i++)
                     cmd2 += (i == 2?"":" ") + s[i];
                 try{
-                Integer.parseInt(cmd2.substring(0, 6));
-                    version = 1.11d;
+                    Integer.parseInt(cmd2.substring(0, 11));
+                    oldversion = 1.12d;
+                }catch(NumberFormatException e1){
+                try{
+                    Integer.parseInt(cmd2.substring(0, 6));
+                    oldversion = 1.11d;
                 }catch(NumberFormatException e2){
                 try{
                     Integer.parseInt(cmd2.substring(0, 2));
-                    version = 1.02d;
+                    oldversion = 1.02d;
                 }catch(NumberFormatException e3){
                 try{
                     Integer.parseInt(cmd2.substring(0, 1));
-                    version = 1.0d;
-                }catch(NumberFormatException e4){}}}
+                    oldversion = 1.0d;
+                }catch(NumberFormatException e4){}}}}
+            } else {
+                updatePref();
+                return true;
             }
         }
         double currentversion = Double.parseDouble(getDescription().getVersion());
-        if(version != null && version < currentversion)
+        if(oldversion != null && oldversion < currentversion)
         {
-            updatePref(version);
-            if(version != 0)
+            updatePref();
+            if(oldversion != 0)
             {
-                updateDB(version);
-                System.out.println("Item Commands: Updated from v"+version.toString()+" to v"+currentversion);
-                version = currentversion;
+                updateDB(oldversion);
+                System.out.println("ItemCommands: Updated from v"+String.valueOf(oldversion)+" to v"+currentversion);
+                this.version = currentversion;
+                return true;
             }
         }
-        return version;
+        return false;
     }
-    void updatePref(Double currentVersion)
+    void updatePref()
     {
         savePref();
     }
@@ -998,6 +989,7 @@ public class ItemCommands extends JavaPlugin {
         String cmd = "";
         String name = "";
         String key = "";
+        double cooldown = 0;
         ArrayList<Item> consume = new ArrayList<Item>();
         if(currentVersion < Double.parseDouble(this.getDescription().getVersion()))
         {
@@ -1010,10 +1002,10 @@ public class ItemCommands extends JavaPlugin {
                 String cmd2 = "";
                 for(int i = 2; i < s.length; i++)
                     cmd2 += (i == 2?"":" ") + s[i];
-                cmd = cmd.trim();
+                cmd2 = cmd2.trim();
                 name = s[0].replaceAll("&+", " ");
                 key = s[1];
-                if(currentVersion >= 1.1d)
+                if(currentVersion >= 1.12d)
                 {
                     ICommand icmd = null;
                     try
@@ -1021,6 +1013,20 @@ public class ItemCommands extends JavaPlugin {
                         icmd = new ICommand(name, key, cmd2, this);
                     }
                     catch(Exception e2){}
+                    putDict(name, key, icmd);
+                    return name.replaceAll(" ", "&+") + " " + key + " " + icmd.toString();
+                }
+                else if(currentVersion >= 1.1d)
+                {
+                    id = Integer.parseInt(cmd2.substring(0, 4));
+                    click = Character.getNumericValue(cmd2.charAt(4));
+                    clickevent = Character.getNumericValue(cmd2.charAt(5));
+                    cmd2 = cmd2.substring(6);
+                    int i = cmd2.split(" ")[0].lastIndexOf(";");
+                    if(i != -1)
+                        consume = ICommand.parseConsume(cmd2.substring(0, i));
+                    cmd = cmd2.substring(i+1);
+                    ICommand icmd = new ICommand(name, key, id, cmd, click, clickevent, cooldown, consume, this);
                     putDict(name, key, icmd);
                     return name.replaceAll(" ", "&+") + " " + key + " " + icmd.toString();
                 }
@@ -1035,12 +1041,33 @@ public class ItemCommands extends JavaPlugin {
                     }
                     else
                         cmd = cmd2.substring(1);
-                    ICommand icmd = new ICommand(name, key, id, cmd, click, clickevent, consume, this);
+                    ICommand icmd = new ICommand(name, key, id, cmd, click, clickevent, cooldown, consume, this);
                     putDict(name, key, icmd);
                     return name.replaceAll(" ", "&+") + " " + key + " " + icmd.toString();
                 }
             }
         }
         return line;
+    }
+    double parseTime(String time)
+    {
+        int toS = 1;
+        if(time.endsWith("s"))
+        {
+            time = time.substring(0, time.length()-1);
+        }
+        else if(time.endsWith("m"))
+        {
+            toS = 60;
+            time = time.substring(0, time.length()-1);
+        }
+        else if(time.endsWith("h"))
+        {
+            toS = 3600;
+            time = time.substring(0, time.length()-1);
+        } else {
+            time = time.substring(0, time.length());
+        }
+        return Double.parseDouble(time)*toS;
     }
 }

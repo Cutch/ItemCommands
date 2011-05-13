@@ -14,15 +14,18 @@ public class ICommand
     public ArrayList<Item> consume = new ArrayList<Item>();;
     public String player;
     public String key;
+    public double cooldown = 0;
+    private long lastrun = 0;
     public ICommand(String player, String key, String cmd, ItemCommands plugin)
     {
         cmd = cmd.trim();
         this.player = player;
         this.key = key;
         this.id = Integer.parseInt(cmd.substring(0, 4));
-        this.click = Character.getNumericValue(cmd.charAt(4));
-        this.clickevent = Character.getNumericValue(cmd.charAt(5));
-        cmd = cmd.substring(6);
+        this.cooldown = Double.parseDouble(cmd.substring(4, 10))*0.1;
+        this.click = Character.getNumericValue(cmd.charAt(10));
+        this.clickevent = Character.getNumericValue(cmd.charAt(11));
+        cmd = cmd.substring(12);
         int i = cmd.split(" ")[0].lastIndexOf(";");
         if(i != -1)
             this.consume = parseConsume(cmd.substring(0, i));
@@ -37,7 +40,7 @@ public class ICommand
             global = 1;
         this.plugin = plugin;
     }
-    public ICommand(String player, String key, int id, String cmd, int click, int clickevent, ArrayList<Item> consume, ItemCommands plugin)
+    public ICommand(String player, String key, int id, String cmd, int click, int clickevent, double cooldown, ArrayList<Item> consume, ItemCommands plugin)
     {
         this.player = player;
         this.key = key;
@@ -46,6 +49,7 @@ public class ICommand
         this.clickevent = clickevent;
         this.id = id;
         this.consume = consume;
+        this.cooldown = cooldown;
         if(key.contains(":"))
             bindto = 0;
         else
@@ -63,11 +67,22 @@ public class ICommand
         for(Item i : consume)
             c += i.toString();
         String id = plugin.lspace(String.valueOf(this.id), "0", 4);
-        return id + String.valueOf(click) + String.valueOf(clickevent) + c + cmd;
+        String cooldown = plugin.lspace(String.valueOf((int)(this.cooldown*10)), "0", 6);
+        return id + cooldown + String.valueOf(click) + String.valueOf(clickevent) + c + cmd;
     }
-    public boolean runEvent()
+    public boolean shouldRunOriginalEvent()
     {
         return clickevent == 1;
+    }
+    public boolean canRunCommand()
+    {
+        long currentTime = System.currentTimeMillis();
+        if(currentTime - lastrun > cooldown*1000)
+        {
+            lastrun = System.currentTimeMillis();
+            return true;
+        }
+        return false;
     }
     public boolean isGlobal()
     {
