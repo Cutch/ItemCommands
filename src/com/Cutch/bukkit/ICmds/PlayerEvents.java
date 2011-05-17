@@ -60,25 +60,50 @@ public class PlayerEvents extends PlayerListener {
                                 if(cmdStr.startsWith("/"))
                                 {
                                     String[] bcmd = cmdStr.split(" ");
-                                    String[] args = new String[bcmd.length - 1];
-                                    for(int i2 = 1; i2 < bcmd.length; i2++)
-                                        args[i2-1] = bcmd[i2];
-                                    PluginCommand p = plugin.getServer().getPluginCommand(bcmd[0].replaceFirst("/", ""));
-                                    boolean p1 = plugin.checkPermissions(player, "ICmds.super", plugin.superNeedOP);
-                                    boolean p2 = plugin.checkPermissions(player, "ICmds.super.global", plugin.superGlobalNeedOP);
-                                    if(p1 || (p2 && global))
+                                    boolean wait;
+                                    if(wait=bcmd[0].startsWith("/wait"))
                                     {
-                                        player.addSuperAccess();
-                                        if(plugin.pms != null)
-                                            plugin.pms.addSuperAccess(player.getName());
+                                        try
+                                        {
+                                            double time = Double.parseDouble(bcmd[1]);
+                                            Thread.sleep((long)time*1000);
+                                        }catch(Exception e)
+                                        {
+                                            plugin.sendMessage(player, plugin.errc + "Argument 2 expects an ID (Remove is Arg 1)");
+                                        }
                                     }
-                                    if(p != null)
-                                        p.execute(player, bcmd[0].replaceFirst("/", ""), args);
-                                    if(p1 || (p2 && global))
+                                    if(!wait || wait && bcmd.length > 2) 
                                     {
-                                        player.removeSuperAccess();
-                                        if(plugin.pms != null)
-                                            plugin.pms.removeSuperAccess(player.getName());
+                                        String[] args;
+                                        if(wait)
+                                        {
+                                            args = new String[bcmd.length - 2];
+                                            for(int i2 = 2; i2 < bcmd.length; i2++)
+                                                args[i2-2] = bcmd[i2];
+                                        }
+                                        else
+                                        {
+                                            args = new String[bcmd.length - 1];
+                                            for(int i2 = 1; i2 < bcmd.length; i2++)
+                                                args[i2-1] = bcmd[i2];
+                                        }
+                                        PluginCommand p = plugin.getServer().getPluginCommand(bcmd[0].replaceFirst("/", ""));
+                                        boolean p1 = plugin.checkPermissions(player, "ICmds.super", plugin.superNeedOP);
+                                        boolean p2 = plugin.checkPermissions(player, "ICmds.super.global", plugin.superGlobalNeedOP);
+                                        if(p1 || (p2 && global))
+                                        {
+                                            player.addSuperAccess();
+                                            if(plugin.pms != null)
+                                                plugin.pms.addSuperAccess(player.getName());
+                                        }
+                                        if(p != null)
+                                            p.execute(player, bcmd[0].replaceFirst("/", ""), args);
+                                        if(p1 || (p2 && global))
+                                        {
+                                            player.removeSuperAccess();
+                                            if(plugin.pms != null)
+                                                plugin.pms.removeSuperAccess(player.getName());
+                                        }
                                     }
                                 }
                                 else
