@@ -47,79 +47,116 @@ public class PlayerEvents extends PlayerListener {
                     cmds = plugin.getDict("", keys[1-bindto]).get(keys[1-bindto]);
                 if (containsCommand(cmds.getElements(), click)) {
                     Integer[] ids = cmds.getIDList();
-                    for(Integer id : ids)
+                    if(cmds.cycle == 0)
                     {
-                        ICommand cmd = cmds.findByID(id);
-                        if(cmd != null && cmd.click == click && cmd.canRunCommand())
+                        for(Integer id : ids)
                         {
-                            String item = "";
-                            if((item = checkReagents(player, cmd.consume)).isEmpty())
-                            {
-                                consume(player, cmd.consume);
-                                String cmdStr = plugin.stringReplacer(cmd.cmd, player, null);
-                                if(cmdStr.startsWith("/"))
-                                {
-                                    String[] bcmd = cmdStr.split(" ");
-                                    boolean wait;
-                                    if(wait=bcmd[0].startsWith("/wait"))
-                                    {
-                                        try
-                                        {
-                                            double time = Double.parseDouble(bcmd[1]);
-                                            Thread.sleep((long)time*1000);
-                                        }catch(Exception e)
-                                        {
-                                            plugin.sendMessage(player, plugin.errc + "Argument 2 expects an ID (Remove is Arg 1)");
-                                        }
-                                    }
-                                    if(!wait || wait && bcmd.length > 2) 
-                                    {
-                                        String[] args;
-                                        if(wait)
-                                        {
-                                            args = new String[bcmd.length - 2];
-                                            for(int i2 = 2; i2 < bcmd.length; i2++)
-                                                args[i2-2] = bcmd[i2];
-                                        }
-                                        else
-                                        {
-                                            args = new String[bcmd.length - 1];
-                                            for(int i2 = 1; i2 < bcmd.length; i2++)
-                                                args[i2-1] = bcmd[i2];
-                                        }
-                                        PluginCommand p = plugin.getServer().getPluginCommand(bcmd[0].replaceFirst("/", ""));
-                                        boolean p1 = plugin.checkPermissions(player, "ICmds.super", plugin.superNeedOP);
-                                        boolean p2 = plugin.checkPermissions(player, "ICmds.super.global", plugin.superGlobalNeedOP);
-                                        if(p1 || (p2 && global))
-                                        {
-                                            player.addSuperAccess();
-                                            if(plugin.pms != null)
-                                                plugin.pms.addSuperAccess(player.getName());
-                                        }
-                                        if(p != null)
-                                            p.execute(player, bcmd[0].replaceFirst("/", ""), args);
-                                        if(p1 || (p2 && global))
-                                        {
-                                            player.removeSuperAccess();
-                                            if(plugin.pms != null)
-                                                plugin.pms.removeSuperAccess(player.getName());
-                                        }
-                                    }
-                                }
-                                else
-                                    player.sendMessage(ChatColor.BLUE+cmdStr);
-                                event.setCancelled(cmd.clickevent == 0);
-                                if(cmd.clickevent == 1)
-                                    event.setUseItemInHand(Result.ALLOW);
-                                else
-                                    event.setUseItemInHand(Result.DENY);
-                            }
-                            else
-                                player.sendMessage(plugin.errc+"Could not run command missing "+item);
+                            ICommand cmd = cmds.findByID(id);
+                            runCommand(event, id, player, cmd, click, global);
                         }
+                    }
+                    else if(cmds.cycle == 1)
+                    {
+                        int id = cmds.shuffle();
+                        if(id == -1)
+                            return;
+                        ICommand cmd = cmds.findByID(id);
+                        System.out.println(cmd);
+                        runCommand(event, id, player, cmd, click, global);
+                    }
+                    else if(cmds.cycle == 2)
+                    {
+                        int id = cmds.next();
+                        if(id == -1)
+                            return;
+                        ICommand cmd = cmds.findByID(id);
+                        runCommand(event, id, player, cmd, click, global);
+                    }
+                    else if(cmds.cycle == 3)
+                    {
+                        int id = cmds.random();
+                        if(id == -1)
+                            return;
+                        ICommand cmd = cmds.findByID(id);
+                        runCommand(event, id, player, cmd, click, global);
                     }
                 }
             }
+        }
+    }
+    void runCommand(PlayerInteractEvent event, int id, ICPlayer player, ICommand cmd, int click, boolean global)
+    {
+        if(cmd != null && cmd.click == click && cmd.canRunCommand())
+        {
+            String item = "";
+            if((item = checkReagents(player, cmd.consume)).isEmpty())
+            {
+                consume(player, cmd.consume);
+                String cmdStr = plugin.stringReplacer(cmd.cmd, player, null);
+                if(cmdStr.startsWith("/"))
+                {
+                    String[] bcmd = cmdStr.split(" ");
+                    boolean wait;
+                    if(wait=bcmd[0].startsWith("/wait"))
+                    {
+                        try
+                        {
+                            double time = Double.parseDouble(bcmd[1]);
+                            Thread.sleep((long)time*1000);
+                        }catch(Exception e)
+                        {
+                            plugin.sendMessage(player, plugin.errc + "Argument 2 expects an ID (Remove is Arg 1)");
+                        }
+                    }
+                    if(!wait || wait && bcmd.length > 2) 
+                    {
+                        String[] args;
+                        if(wait)
+                        {
+                            args = new String[bcmd.length - 2];
+                            for(int i2 = 2; i2 < bcmd.length; i2++)
+                                args[i2-2] = bcmd[i2];
+                        }
+                        else
+                        {
+                            args = new String[bcmd.length - 1];
+                            for(int i2 = 1; i2 < bcmd.length; i2++)
+                                args[i2-1] = bcmd[i2];
+                        }
+                        PluginCommand p = plugin.getServer().getPluginCommand(bcmd[0].replaceFirst("/", ""));
+                        boolean p1 = plugin.checkPermissions(player, "ICmds.super", plugin.superNeedOP);
+                        boolean p2 = plugin.checkPermissions(player, "ICmds.super.global", plugin.superGlobalNeedOP);
+                        if(p1 || (p2 && global))
+                        {
+                            player.addSuperAccess();
+                            if(plugin.pms != null)
+                                plugin.pms.addSuperAccess(player.getName());
+                        }
+                        if(p != null)
+                        {
+                            p.execute(player, bcmd[0].replaceFirst("/", ""), args);
+                            cmd.count();
+                        }
+                        if(p1 || (p2 && global))
+                        {
+                            player.removeSuperAccess();
+                            if(plugin.pms != null)
+                                plugin.pms.removeSuperAccess(player.getName());
+                        }
+                    }
+                }
+                else {
+                    player.sendMessage(ChatColor.BLUE+cmdStr);
+                    cmd.count();
+                }
+                event.setCancelled(cmd.clickevent == 0);
+                if(cmd.clickevent == 1)
+                    event.setUseItemInHand(Result.ALLOW);
+                else
+                    event.setUseItemInHand(Result.DENY);
+            }
+            else
+                player.sendMessage(plugin.errc+"Could not run command missing "+item);
         }
     }
     boolean containsCommand(Enumeration<ICommand> elements, int click)

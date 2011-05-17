@@ -16,6 +16,8 @@ public class ICommand
     public String key;
     public double cooldown = 0;
     private long lastrun = 0;
+    protected ICommands parent = null;
+    int count = 0;
     public ICommand(String player, String key, String cmd, ItemCommands plugin)
     {
         cmd = cmd.trim();
@@ -25,7 +27,7 @@ public class ICommand
         this.cooldown = Double.parseDouble(cmd.substring(4, 10))*0.1;
         this.click = Character.getNumericValue(cmd.charAt(10));
         this.clickevent = Character.getNumericValue(cmd.charAt(11));
-        cmd = cmd.substring(12);
+        cmd = cmd.substring(13);
         int i = cmd.split(" ")[0].lastIndexOf(";");
         if(i != -1)
             this.consume = parseConsume(cmd.substring(0, i));
@@ -63,12 +65,13 @@ public class ICommand
     @Override
     public String toString()
     {
+        parent = plugin.findByKey(player, key);
         String c = "";
         for(Item i : consume)
             c += i.toString();
         String id = plugin.lspace(String.valueOf(this.id), "0", 4);
         String cooldown = plugin.lspace(String.valueOf((int)(this.cooldown*10)), "0", 6);
-        return id + cooldown + String.valueOf(click) + String.valueOf(clickevent) + c + cmd;
+        return id + cooldown + String.valueOf(click) + String.valueOf(clickevent) + String.valueOf(parent.cycle) + c + cmd;
     }
     public boolean shouldRunOriginalEvent()
     {
@@ -95,5 +98,8 @@ public class ICommand
         for(String s : ss)
             list.add(new Item(s));
         return list;
+    }
+    public void count(){
+        count++;
     }
 }
