@@ -1,6 +1,6 @@
 name: ItemCommands
 main: com.Cutch.bukkit.ICmds.ItemCommands
-version: 1.13
+version: 1.14
 author: Cutch
 commands:
   icmd:

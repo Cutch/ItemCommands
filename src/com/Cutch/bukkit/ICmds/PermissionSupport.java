@@ -40,6 +40,14 @@ public abstract class PermissionSupport {
     public int returnPermissionType(){
         return permissionsType; 
     }
+    public void disable()
+    {
+        if(permissionsType == 0)
+        {
+            Permissions p = (Permissions)plugin.getServer().getPluginManager().getPlugin("Permissions");
+            p.Security = hookPermissionHandler.PermissionsHandler;
+        }
+    }
     public boolean has(Player name, String node)
     {
         return this.Permissions.has(name, node);

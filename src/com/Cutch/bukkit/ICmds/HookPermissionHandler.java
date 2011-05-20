@@ -9,8 +9,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.util.config.Configuration;
 
 public abstract class HookPermissionHandler extends PermissionHandler {
-    public static PermissionHandler PermissionsHandler;
-    static List<String> superL = new ArrayList<String>();
+    public PermissionHandler PermissionsHandler;
+    List<String> superL = new ArrayList<String>();
     public void addSuperAccess(String name)
     {
         if(!superL.contains(name))

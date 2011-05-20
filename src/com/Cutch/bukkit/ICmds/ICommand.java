@@ -1,6 +1,7 @@
 package com.Cutch.bukkit.ICmds;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 public class ICommand
 {
@@ -9,13 +10,16 @@ public class ICommand
     public int click;
     public int clickevent;
     public String cmd;
-    public int global = 0;
     public int bindto = 0;
     public ArrayList<Item> consume = new ArrayList<Item>();;
     public String player;
     public String key;
     public double cooldown = 0;
+    HashMap<String, Long> globalCooldown = new HashMap<String, Long>();
     private long lastrun = 0;
+    protected ICommands parent = null;
+    int count = 0;
+    public int global = 0;
     public ICommand(String player, String key, String cmd, ItemCommands plugin)
     {
         cmd = cmd.trim();
@@ -25,7 +29,7 @@ public class ICommand
         this.cooldown = Double.parseDouble(cmd.substring(4, 10))*0.1;
         this.click = Character.getNumericValue(cmd.charAt(10));
         this.clickevent = Character.getNumericValue(cmd.charAt(11));
-        cmd = cmd.substring(12);
+        cmd = cmd.substring(13);
         int i = cmd.split(" ")[0].lastIndexOf(";");
         if(i != -1)
             this.consume = parseConsume(cmd.substring(0, i));
@@ -54,35 +58,45 @@ public class ICommand
             bindto = 0;
         else
             bindto = 1;
-        if(isGlobal())
-            global = 0;
-        else
-            global = 1;
         this.plugin = plugin;
     }
     @Override
     public String toString()
     {
+        parent = plugin.findByKey(player, key);
         String c = "";
         for(Item i : consume)
             c += i.toString();
         String id = plugin.lspace(String.valueOf(this.id), "0", 4);
         String cooldown = plugin.lspace(String.valueOf((int)(this.cooldown*10)), "0", 6);
-        return id + cooldown + String.valueOf(click) + String.valueOf(clickevent) + c + cmd;
+        return id + cooldown + String.valueOf(click) + String.valueOf(clickevent) + String.valueOf(parent.cycle) + c + cmd;
     }
     public boolean shouldRunOriginalEvent()
     {
         return clickevent == 1;
     }
-    public boolean canRunCommand()
+    public boolean canRunCommand(String player)
     {
-        long currentTime = System.currentTimeMillis();
-        if(currentTime - lastrun > cooldown*1000)
+        if(!isGlobal())
         {
-            lastrun = System.currentTimeMillis();
-            return true;
+            long currentTime = System.currentTimeMillis();
+            if(currentTime - lastrun > cooldown*1000)
+            {
+                lastrun = System.currentTimeMillis();
+                return true;
+            }
+            return false;
         }
-        return false;
+        else
+        {
+            long currentTime = System.currentTimeMillis();
+            if(currentTime - globalCooldown.get(player) > cooldown*1000)
+            {
+                globalCooldown.put(player, System.currentTimeMillis());
+                return true;
+            }
+            return false;
+        }
     }
     public boolean isGlobal()
     {
@@ -95,5 +109,8 @@ public class ICommand
         for(String s : ss)
             list.add(new Item(s));
         return list;
+    }
+    public void count(){
+        count++;
     }
 }

@@ -60,6 +60,7 @@ public class ItemCommands extends JavaPlugin {
     public Dictionary<String, Dictionary<String, ICommands>> players=null;
 
     public void onDisable() {
+        pms.disable();
         System.out.println("ItemCommands is Disabled");
     }
 
@@ -111,6 +112,7 @@ public class ItemCommands extends JavaPlugin {
                             int per = 1;
                             int bindto = -1;
                             int end = 0;
+                            int cycle = 0;
                             double cooldown = 0;
                             ArrayList<Item> consumes = new ArrayList<Item>();
                             int i;
@@ -128,6 +130,14 @@ public class ItemCommands extends JavaPlugin {
                                     click = 1;
                                 else if(args[i].equalsIgnoreCase("-e"))
                                     clickevent = 1;
+                                else if(args[i].equalsIgnoreCase("-al"))
+                                    cycle = 0;
+                                else if(args[i].equalsIgnoreCase("-sh"))
+                                    cycle = 1;
+                                else if(args[i].equalsIgnoreCase("-cy"))
+                                    cycle = 2;
+                                else if(args[i].equalsIgnoreCase("-ra"))
+                                    cycle = 3;
                                 else if(args[i].equalsIgnoreCase("-c"))
                                 {
                                     String[] cs = args[++i].split(";");
@@ -149,7 +159,7 @@ public class ItemCommands extends JavaPlugin {
                                 }
                             }
                             end = i;
-                            if(per == 0 && !checkPermissions(player, "ICmds.global", globalNeedOP))
+                            if(per == 0 && !(checkPermissions(player, "ICmds.global", globalNeedOP)||checkPermissions(player, "ICmds.admin", globalNeedOP)))
                                 sendMessage(player, errc + "You do not have the required permissions for global assignments.");
                             else
                             {
@@ -196,7 +206,7 @@ public class ItemCommands extends JavaPlugin {
                                     splayer = "";
                                 int id = findNextID(splayer);
                                 ICommand cmd = new ICommand(splayer, key, id, a, click, clickevent, cooldown, consumes, this);
-                                putDict(splayer, key, cmd);
+                                cmd.parent = putDict(splayer, key, cycle, cmd);
                                 String pcmd = cmd.cmd;
                                 pcmd = pcmd.replaceFirst(":0", "");
                                 sendMessage(player, cmdc + "ID: " + id + " Command: " + pcmd + " added to "+(bindto == 0 ? "item" : "slot") + " " + key + " for " + (!splayer.isEmpty()?splayer:"Everyone"));
@@ -214,6 +224,17 @@ public class ItemCommands extends JavaPlugin {
                     if(checkPermissions(player, "ICmds.create", createNeedOP))
                     {
                         if(args.length >= 2){
+                            int per = 1;
+                            int i;
+                            for(i = 2; i < args.length; i+=1)
+                            {
+                                if(args[i].equalsIgnoreCase("-g"))
+                                    per = 0;
+                                else
+                                {
+                                    break;
+                                }
+                            }
                             int id = -1;
                             try{
                                 id = Integer.parseInt(args[1]);
@@ -222,7 +243,8 @@ public class ItemCommands extends JavaPlugin {
                                 sendMessage(player, errc + "Argument 2 expects an ID (Remove is Arg 1)");
                             }
                             if(id != -1){
-                                ICommands cmds = getICmdsByID(player, id, splayer.isEmpty());
+                                
+                                ICommands cmds = getICmdsByID(per == 0 ? "" : splayer, id);
                                 ICommand cmd = null;
                                 if(cmds == null || (cmd = cmds.remove(id)) == null)
                                 {
@@ -243,7 +265,18 @@ public class ItemCommands extends JavaPlugin {
                 {
                     if(checkPermissions(player, "ICmds.create", createNeedOP))
                     {
-                        if(args.length >= 2){
+                        if(args.length >= 3){
+                            int per = 1;
+                            int i;
+                            for(i = 3; i < args.length; i+=1)
+                            {
+                                if(args[i].equalsIgnoreCase("-g"))
+                                    per = 0;
+                                else
+                                {
+                                    break;
+                                }
+                            }
                             int id = -1;
                             int id2 = -1;
                             try
@@ -262,22 +295,22 @@ public class ItemCommands extends JavaPlugin {
                             }
                             if(id != -1 && id2 != -1)
                             {
-                                ICommands cmds = getICmdsByID(player, id, splayer.isEmpty());
-                                ICommand cmd = cmds.get(id);
-                                if(cmd != null)
+                                ICommands cmds = getICmdsByID(per == 0 ? "" : splayer, id);
+                                if(cmds != null)
                                 {
-                                    if(cmd != null)
+                                    ICommand cmd = cmds.findByID(id);
+                                    ICommand cmd2 = cmds.findByID(id2);
+                                    if(cmd2 != null)
                                     {
-                                        ICommand cmd2 = cmds.get(id2);
                                         cmd.id = id2;
                                         cmd2.id = id;
                                         cmds.putDict(cmd);
                                         cmds.putDict(cmd2);
                                         saveDB();
                                     } else
-                                        sendMessage(player, errc + "Id #1 "+id2+" was not found");
+                                        sendMessage(player, errc + "Id #2 "+id2+" was not found");
                                 } else
-                                    sendMessage(player, errc + "Id #2 "+id+" was not found");
+                                    sendMessage(player, errc + "Id #1 "+id+" was not found");
                             }
                         }
                         else
@@ -309,6 +342,7 @@ public class ItemCommands extends JavaPlugin {
                                 int per = 1;
                                 int end = 0;
                                 double cooldown = -1;
+                                int cycle = -1;
                                 ArrayList<Item> consumes = new ArrayList<Item>();
                                 int i;
                                 for(i = 2; i < args.length; i+=1)
@@ -325,6 +359,14 @@ public class ItemCommands extends JavaPlugin {
                                         click = 1;
                                     else if(args[i].equalsIgnoreCase("-e"))
                                         clickevent = 1;
+                                    else if(args[i].equalsIgnoreCase("-al"))
+                                        cycle = 0;
+                                    else if(args[i].equalsIgnoreCase("-sh"))
+                                        cycle = 1;
+                                    else if(args[i].equalsIgnoreCase("-cy"))
+                                        cycle = 2;
+                                    else if(args[i].equalsIgnoreCase("-ra"))
+                                        cycle = 3;
                                     else if(args[i].equalsIgnoreCase("-c"))
                                     {
                                         String[] cs = args[++i].split(";");
@@ -349,17 +391,17 @@ public class ItemCommands extends JavaPlugin {
 
                                 if(player == null && key.isEmpty())
                                 {
-                                    sendMessage(player, cmdc + "Usage: /icmd change [id] <flags> <command> "+descc+"#Change flags by id");
+                                    sendMessage(player, cmdc + "Usage: /icmd change [id] [-t typeid] <flags> <command> "+descc+"#Change flags by id");
                                     return true;
                                 }
                                 if(per == 0)
                                     splayer = "";
-                                ICommands cmds = getICmdsByID(player, id, per == 0);
-                                ICommand cmd = cmds.findByID(id);
-                                if(per == 0 && !checkPermissions(player, "ICmds.global", globalNeedOP))
+                                ICommands cmds = getICmdsByID(splayer, id);
+                                if(per == 0 && !(checkPermissions(player, "ICmds.global", globalNeedOP)||checkPermissions(player, "ICmds.admin", globalNeedOP)))
                                     sendMessage(player, errc + "You do not have the required permissions for global assignments.");
-                                else if(cmd != null)
+                                else if(cmds != null)
                                 {
+                                    ICommand cmd = cmds.findByID(id);
                                     if(key.isEmpty())
                                         key = cmd.key;
                                     if(click == -1)
@@ -368,6 +410,8 @@ public class ItemCommands extends JavaPlugin {
                                         clickevent = cmd.clickevent;
                                     if(cooldown == -1)
                                         cooldown = cmd.cooldown;
+                                    if(cycle == -1)
+                                        cycle = cmds.cycle;
                                     if(bindto == -1)
                                         bindto = cmd.bindto;
                                     else
@@ -378,7 +422,7 @@ public class ItemCommands extends JavaPlugin {
                                         keys[1] = String.valueOf(player.getInventory().getHeldItemSlot()+1);
                                         cmd.key = keys[bindto];
                                         cmds.remove(id);
-                                        putDict(splayer, key, cmd);
+                                        putDict(splayer, key, cycle, cmd);
                                     }
                                     if(per == -1)
                                         per = cmd.global;
@@ -391,7 +435,8 @@ public class ItemCommands extends JavaPlugin {
                                     cmd.consume = consumes;
                                     cmd.clickevent = clickevent;
                                     cmd.cooldown = cooldown;
-                                    putDict(splayer, key, cmd);
+                                    cmds.cycle = cycle;
+                                    putDict(splayer, key, cycle, cmd);
                                     saveDB();
                                 }
                                 else
@@ -586,7 +631,10 @@ public class ItemCommands extends JavaPlugin {
                     String name = s[0].replaceAll("&+", " ");
                     try
                     {
-                        this.putDict(name, s[1], new ICommand(name, s[1], cmd2, this));
+                        int cycle = Character.getNumericValue(cmd2.charAt(12));
+                        ICommand icmd = null;
+                        ICommands putDict = this.putDict(name, s[1], cycle, icmd = new ICommand(name, s[1], cmd2, this));
+                        icmd.parent = putDict;
                     }
                     catch(Exception e2)
                     {
@@ -799,29 +847,39 @@ public class ItemCommands extends JavaPlugin {
         }
         return cmd;
     }
-    public int putDict(String player, String key, ICommand i)
+    public ICommands putDict(String player, String key, int cycle, ICommand i)
     {
         Dictionary<String, ICommands> cmds = getDict(player, key);
-        int id = cmds.get(key).putDict(i);
+        ICommands get = cmds.get(key);
+        if(get == null)
+            
+        get.cycle = cycle;
+        int id = get.putDict(i, cycle);
+        cmds.put(key, get);
         players.put(player, cmds);
-        return id;
-
+        return get;
     }
-    public ICommand findByID(int id)
+    public ICommand findByID(String player, int id)
     {
-        ArrayList<Integer> data = new ArrayList<Integer>();
-        Enumeration<Dictionary<String, ICommands>> dict = players.elements();
+        Enumeration<ICommands> dict = players.get(player).elements();
         for (;dict.hasMoreElements();)
         {
-            Dictionary<String, ICommands> values = dict.nextElement();
-            Enumeration<ICommands> elements = values.elements();
-            for (;elements.hasMoreElements();)
-            {
-                ICommands cmds = elements.nextElement();
-                ICommand cmd = null;
-                if((cmd = cmds.findByID(id)) != null)
-                    return cmd;
-            }
+            ICommands cmds = dict.nextElement();
+            ICommand cmd = cmds.findByID(id);
+            if(cmd != null)
+                return cmd;
+        }
+        return null;
+    }
+    public ICommands getICmdsByID(String player, int id)
+    {
+        Enumeration<ICommands> dict = players.get(player).elements();
+        for (;dict.hasMoreElements();)
+        {
+            ICommands cmds = dict.nextElement();
+            ICommand cmd = cmds.findByID(id);
+            if(cmd != null)
+                return cmds;
         }
         return null;
     }
@@ -856,36 +914,36 @@ public class ItemCommands extends JavaPlugin {
         }
         return data.toArray(a);
     }
-    ICommands getICmdsByID(Player player, int id, boolean global){
-        int bindto = 1;
-        String[] keys = new String[2];
-        ItemStack is = player.getItemInHand();
-        keys[0] = String.valueOf(is.getTypeId()) + ":" + String.valueOf(is.getDurability());
-        keys[1] = String.valueOf(player.getInventory().getHeldItemSlot()+1);
-        ICommands cmdt = getDict(player.getName(), keys[bindto]).get(keys[bindto]);
-        ICommand cmd = null;
-        if (cmdt != null)
-            cmd = cmdt.findByID(id);
-        if(cmd == null)
-        {
-            cmdt = getDict(player.getName(), keys[1-bindto]).get(keys[1-bindto]);
-            if(cmdt != null)
-                cmd = cmdt.findByID(id);
-            if(cmd == null)
-            {
-                cmdt = getDict("", keys[bindto]).get(keys[bindto]);
-                if(cmdt != null)
-                    cmd = cmdt.findByID(id);
-                if(cmd == null)
-                {
-                    cmdt = getDict("", keys[1-bindto]).get(keys[1-bindto]);
-                    if(cmdt != null)
-                        cmd = cmdt.findByID(id);
-                }
-            }
-        }
-        return cmdt;
-    }
+//    ICommands getICmdsByID(Player player, int id, boolean global){
+//        int bindto = 1;
+//        String[] keys = new String[2];
+//        ItemStack is = player.getItemInHand();
+//        keys[0] = String.valueOf(is.getTypeId()) + ":" + String.valueOf(is.getDurability());
+//        keys[1] = String.valueOf(player.getInventory().getHeldItemSlot()+1);
+//        ICommands cmdt = getDict(player.getName(), keys[bindto]).get(keys[bindto]);
+//        ICommand cmd = null;
+//        if (cmdt != null)
+//            cmd = cmdt.findByID(id);
+//        if(cmd == null)
+//        {
+//            cmdt = getDict(player.getName(), keys[1-bindto]).get(keys[1-bindto]);
+//            if(cmdt != null)
+//                cmd = cmdt.findByID(id);
+//            if(cmd == null)
+//            {
+//                cmdt = getDict("", keys[bindto]).get(keys[bindto]);
+//                if(cmdt != null)
+//                    cmd = cmdt.findByID(id);
+//                if(cmd == null)
+//                {
+//                    cmdt = getDict("", keys[1-bindto]).get(keys[1-bindto]);
+//                    if(cmdt != null)
+//                        cmd = cmdt.findByID(id);
+//                }
+//            }
+//        }
+//        return cmdt;
+//    }
     void sendMessage(Player player, String s)
     {
         if(player != null)
@@ -950,15 +1008,14 @@ public class ItemCommands extends JavaPlugin {
             int m2 = Math.min(g1, g2);
             str = m.replaceAll(String.valueOf((int)((m1-m2)*n+m2)));
         }
-        p = Pattern.compile("<([^\\|]*)\\|([^\\|]*)>");
-        Pattern p2 = Pattern.compile("<([^\\|]*)\\|([^\\|]*)>");
+        p = Pattern.compile("<([^\\|]*)[\\|([^\\|]*)]+>");
         m = p.matcher(str);
         while(m.find())
         {
-            System.out.println(m.group());
-            int m1 = m.groupCount()-1;
-            int n = (int)(r.nextDouble()*m1+1);
-            str = m.replaceAll(m.group(n));
+            String group = m.group();
+            String[] split = group.substring(1, group.length()-1).split("\\|");
+            int n = (int)(r.nextDouble()*split.length);
+            str = m.replaceAll(split[n]);
         }
         return str;
     }
@@ -986,21 +1043,25 @@ public class ItemCommands extends JavaPlugin {
                 for(int i = 2; i < s.length; i++)
                     cmd2 += (i == 2?"":" ") + s[i];
                 try{
-                    Integer.parseInt(cmd2.substring(0, 11));
-                    oldversion = 1.12d;
+                    Integer.parseInt(cmd2.substring(0, 13));
+                    oldversion = Double.parseDouble(this.getDescription().getVersion());
                 }catch(Exception e1){
+                try{
+                    Integer.parseInt(cmd2.substring(0, 12));
+                    oldversion = 1.13d;
+                }catch(Exception e2){
                 try{
                     Integer.parseInt(cmd2.substring(0, 6));
                     oldversion = 1.11d;
-                }catch(Exception e2){
+                }catch(Exception e3){
                 try{
                     Integer.parseInt(cmd2.substring(0, 2));
                     oldversion = 1.02d;
-                }catch(Exception e3){
+                }catch(Exception e4){
                 try{
                     Integer.parseInt(cmd2.substring(0, 1));
                     oldversion = 1.0d;
-                }catch(Exception e4){ oldversion = null; }}}}
+                }catch(Exception e5){ oldversion = null; }}}}}
             }
         }
         double currentversion = Double.parseDouble(getDescription().getVersion());
@@ -1045,6 +1106,7 @@ public class ItemCommands extends JavaPlugin {
         String name = "";
         String key = "";
         double cooldown = 0;
+        int cycle = 0;
         ArrayList<Item> consume = new ArrayList<Item>();
         if(currentVersion < Double.parseDouble(this.getDescription().getVersion()))
         {
@@ -1060,45 +1122,68 @@ public class ItemCommands extends JavaPlugin {
                 cmd2 = cmd2.trim();
                 name = s[0].replaceAll("&+", " ");
                 key = s[1];
-                if(currentVersion >= 1.12d)
+                try
                 {
-                    ICommand icmd = null;
-                    try
+                    if(currentVersion >= 1.14d)
                     {
-                        icmd = new ICommand(name, key, cmd2, this);
+                        ICommand icmd = null;
+                        cycle = Character.getNumericValue(cmd2.charAt(12));
+                        try
+                        {
+                            icmd = new ICommand(name, key, cmd2, this);
+                        }
+                        catch(Exception e2){}
+                        icmd.parent = putDict(name, key, cycle, icmd);
+                        return name.replaceAll(" ", "&+") + " " + key + " " + icmd.toString();
                     }
-                    catch(Exception e2){}
-                    putDict(name, key, icmd);
-                    return name.replaceAll(" ", "&+") + " " + key + " " + icmd.toString();
-                }
-                else if(currentVersion >= 1.1d)
-                {
-                    id = Integer.parseInt(cmd2.substring(0, 4));
-                    click = Character.getNumericValue(cmd2.charAt(4));
-                    clickevent = Character.getNumericValue(cmd2.charAt(5));
-                    cmd2 = cmd2.substring(6);
-                    int i = cmd2.split(" ")[0].lastIndexOf(";");
-                    if(i != -1)
-                        consume = ICommand.parseConsume(cmd2.substring(0, i));
-                    cmd = cmd2.substring(i+1);
-                    ICommand icmd = new ICommand(name, key, id, cmd, click, clickevent, cooldown, consume, this);
-                    putDict(name, key, icmd);
-                    return name.replaceAll(" ", "&+") + " " + key + " " + icmd.toString();
-                }
-                else
-                {
-                    id = findNextID(name);
-                    click = Character.getNumericValue(cmd2.charAt(0));
-                    if(currentVersion > 1.0d)
+                    if(currentVersion >= 1.12d)
                     {
-                        clickevent = Character.getNumericValue(cmd2.charAt(1));
-                        cmd = cmd2.substring(2);
+                        id = Integer.parseInt(cmd2.substring(0, 4));
+                        cooldown = Double.parseDouble(cmd2.substring(4, 10))*0.1;
+                        click = Character.getNumericValue(cmd2.charAt(10));
+                        clickevent = Character.getNumericValue(cmd2.charAt(11));
+                        cmd = cmd2.substring(12);
+                        int i = cmd.split(" ")[0].lastIndexOf(";");
+                        if(i != -1)
+                            consume = ICommand.parseConsume(cmd.substring(0, i));
+                        cmd = cmd.substring(i+1);
+                        ICommand icmd = new ICommand(name, key, id, cmd, click, clickevent, cooldown, consume, this);
+                        icmd.parent = putDict(name, key, cycle, icmd);
+                        return name.replaceAll(" ", "&+") + " " + key + " " + icmd.toString();
+                    }
+                    else if(currentVersion >= 1.1d)
+                    {
+                        id = Integer.parseInt(cmd2.substring(0, 4));
+                        click = Character.getNumericValue(cmd2.charAt(4));
+                        clickevent = Character.getNumericValue(cmd2.charAt(5));
+                        cmd2 = cmd2.substring(6);
+                        int i = cmd2.split(" ")[0].lastIndexOf(";");
+                        if(i != -1)
+                            consume = ICommand.parseConsume(cmd2.substring(0, i));
+                        cmd = cmd2.substring(i+1);
+                        ICommand icmd = new ICommand(name, key, id, cmd, click, clickevent, cooldown, consume, this);
+                        icmd.parent = putDict(name, key, cycle, icmd);
+                        return name.replaceAll(" ", "&+") + " " + key + " " + icmd.toString();
                     }
                     else
-                        cmd = cmd2.substring(1);
-                    ICommand icmd = new ICommand(name, key, id, cmd, click, clickevent, cooldown, consume, this);
-                    putDict(name, key, icmd);
-                    return name.replaceAll(" ", "&+") + " " + key + " " + icmd.toString();
+                    {
+                        id = findNextID(name);
+                        click = Character.getNumericValue(cmd2.charAt(0));
+                        if(currentVersion > 1.0d)
+                        {
+                            clickevent = Character.getNumericValue(cmd2.charAt(1));
+                            cmd = cmd2.substring(2);
+                        }
+                        else
+                            cmd = cmd2.substring(1);
+                        ICommand icmd = new ICommand(name, key, id, cmd, click, clickevent, cooldown, consume, this);
+                        icmd.parent = putDict(name, key, cycle, icmd);
+                        return name.replaceAll(" ", "&+") + " " + key + " " + icmd.toString();
+                    }
+                }
+                catch(Exception e2)
+                {
+                    System.out.println("ItemCommands: Preference Version number does not match the database");
                 }
             }
         }
