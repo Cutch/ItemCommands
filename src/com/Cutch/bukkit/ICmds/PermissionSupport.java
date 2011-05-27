@@ -21,7 +21,7 @@ public abstract class PermissionSupport {
             if(test != null) {
                 Permissions p = (Permissions)test;
                 Version = p.getDescription().getVersion();
-                p.Security = hookPermissionHandler = new HookPermissionHandler(p) {};
+                p.Security = hookPermissionHandler = new HookPermissionHandler(p) { };
                 this.Permissions = p.getHandler();
                 if(permissionsType == 0)
                     System.out.println("ItemCommands: Using Permissions Plugin v" + Version);

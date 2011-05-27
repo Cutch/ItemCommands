@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Dictionary;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Random;
 public class ICommands
@@ -14,6 +15,8 @@ public class ICommands
     int bindto = 0;
     String key="";
     String player="";
+    HashMap<String, Integer> globalLast = new HashMap<String, Integer>();
+    HashMap<String, Integer> globalSLast = new HashMap<String, Integer>();
     public Dictionary<Integer, ICommand> cmds = new Hashtable<Integer, ICommand>();
     int cycle = 0;
     public ICommands(ItemCommands instance)
@@ -75,8 +78,12 @@ public class ICommands
     {
         return cmds.size();
     }
+    public boolean isGlobal()
+    {
+        return player.isEmpty();
+    }
     int slast = -1;
-    int shuffle()
+    int shuffle(String player)
     {
         int min = Integer.MAX_VALUE;
         Dictionary<Integer, ArrayList<Integer>> playcount = new Hashtable<Integer, ArrayList<Integer>>();
@@ -84,13 +91,16 @@ public class ICommands
         while(elements.hasMoreElements())
         {
             ICommand nextElement = elements.nextElement();
-            min = Math.min(min, nextElement.count);
-            ArrayList<Integer> t = playcount.get(nextElement.count);
+            Integer count = nextElement.getCount(player);
+            min = Math.min(min, count);
+            ArrayList<Integer> t = playcount.get(count);
             if(t == null)
                 t = new ArrayList<Integer>();
             t.add(nextElement.id);
-            playcount.put(nextElement.count, t);
+            playcount.put(count, t);
         }
+        if(isGlobal())
+            slast = globalSLast.get(player);
         ArrayList<Integer> list = playcount.get(min);
         Random r = new Random();
         int size = list.size();
@@ -99,6 +109,8 @@ public class ICommands
             int n = (int)(r.nextDouble()*size);
             id = list.get(n);
         }while(id == slast && size > 1);
+        if(isGlobal())
+            globalSLast.put(player, id);
         return slast = id;
     }
     int random()
@@ -112,16 +124,20 @@ public class ICommands
         return ((ICommand)list.get(n)).id;
     }
     int last = -1;
-    int next()
+    int next(String player)
     {
         Enumeration<Integer> elements = cmds.keys();
         ArrayList<Integer> list = Collections.list(elements);
         if(list == null || list.isEmpty())
             return -1;
         Collections.sort(list);
+        if(isGlobal())
+            last = globalLast.get(player);
         int next = ++last;
         if(next >= list.size())
             next = 0;
+        if(isGlobal())
+            globalLast.put(player, next);
         return list.get(last = next);
     }
 }

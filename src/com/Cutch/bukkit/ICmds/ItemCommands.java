@@ -32,6 +32,7 @@ import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.ChatColor;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.inventory.ItemStack;
 public class ItemCommands extends JavaPlugin {
@@ -47,6 +48,7 @@ public class ItemCommands extends JavaPlugin {
     ChatColor errc = ChatColor.RED;
     ChatColor infoc = ChatColor.YELLOW;
     String properties = "ItemCommands.properties";
+    String blacknwhitelist = "BlacknWhitelist.db";
     String database = "Commands.db";
     public iConomySupport ics = null;
     PermissionSupport pms = null;
@@ -58,6 +60,8 @@ public class ItemCommands extends JavaPlugin {
     Double version = null;
     boolean update = true;
     public Dictionary<String, Dictionary<String, ICommands>> players=null;
+    public Dictionary<String, ArrayList<Item>> allow=null;
+    public Dictionary<String, ArrayList<Item>> deny=null;
 
     public void onDisable() {
         pms.disable();
@@ -67,6 +71,8 @@ public class ItemCommands extends JavaPlugin {
     public void onEnable() {
         PluginDescriptionFile desc = this.getDescription();
         players = new Hashtable<String, Dictionary<String, ICommands>>();
+        allow = new Hashtable<String, ArrayList<Item>>();
+        deny = new Hashtable<String, ArrayList<Item>>();
         version = null;
         readPref();
         try
@@ -78,6 +84,7 @@ public class ItemCommands extends JavaPlugin {
             System.out.println("ItemCommands: Permission system not detected. Using Basic Permissions.");
         }
         readDB(true);
+        readBlacknWhite();
         setupiConomy();
         setupHelp();
         PluginManager plmgr = getServer().getPluginManager();
@@ -206,11 +213,18 @@ public class ItemCommands extends JavaPlugin {
                                     splayer = "";
                                 int id = findNextID(splayer);
                                 ICommand cmd = new ICommand(splayer, key, id, a, click, clickevent, cooldown, consumes, this);
-                                cmd.parent = putDict(splayer, key, cycle, cmd);
-                                String pcmd = cmd.cmd;
-                                pcmd = pcmd.replaceFirst(":0", "");
-                                sendMessage(player, cmdc + "ID: " + id + " Command: " + pcmd + " added to "+(bindto == 0 ? "item" : "slot") + " " + key + " for " + (!splayer.isEmpty()?splayer:"Everyone"));
-                                saveDB();
+                                Item item = new Item(key);
+                                boolean listed = isListed(cmd, item, bindto == 1);
+                                if(listed)
+                                {
+                                    cmd.parent = putDict(splayer, key, cycle, cmd);
+                                    String pcmd = cmd.cmd;
+                                    pcmd = pcmd.replaceFirst(":0", "");
+                                    sendMessage(player, cmdc + "ID: " + id + " Command: " + pcmd + " added to "+(bindto == 0 ? "item" : "slot") + " " + key + " for " + (!splayer.isEmpty()?splayer:"Everyone"));
+                                    saveDB();
+                                }
+                                else
+                                    player.sendMessage(errc+"Using command \"" + cmd.getRunningCommand() + "\" with "+(cmd.bindto==0?Material.getMaterial(item.id):"slot "+cmd.key)+" is forbidden.");
                             }
                         }
                         else
@@ -260,6 +274,22 @@ public class ItemCommands extends JavaPlugin {
                     }
                     else
                         sendMessage(player, errc + "You do not have the required permissions for this.");
+                }
+                else if(args[0].equalsIgnoreCase("bind"))
+                {
+                    int option = 0;
+                    if(args.length > 1)
+                    {
+                        if(args[1].equalsIgnoreCase("add"))
+                            option = 1;
+                        else if(args[1].equalsIgnoreCase("set"))
+                            option = 2;
+                        else if(args[1].equalsIgnoreCase("remove"))
+                            option = 3;
+                        else if(args[1].equalsIgnoreCase("list"))
+                            option = 4;
+                    }
+                    bind(player, option, args);
                 }
                 else if(args[0].equalsIgnoreCase("swap"))
                 {
@@ -429,15 +459,22 @@ public class ItemCommands extends JavaPlugin {
                                     String a = "";
                                     for(i = end; i < args.length; i++)
                                         a += (i == end?"":" ") + args[i];
-                                    cmd.click=click;
-                                    if(!a.isEmpty())
-                                        cmd.cmd = a;
-                                    cmd.consume = consumes;
-                                    cmd.clickevent = clickevent;
-                                    cmd.cooldown = cooldown;
-                                    cmds.cycle = cycle;
-                                    putDict(splayer, key, cycle, cmd);
-                                    saveDB();
+                                    Item item = new Item(key);
+                                    boolean listed = isListed(cmd, item, bindto == 1);
+                                    if(listed)
+                                    {
+                                        cmd.click=click;
+                                        if(!a.isEmpty())
+                                            cmd.cmd = a;
+                                        cmd.consume = consumes;
+                                        cmd.clickevent = clickevent;
+                                        cmd.cooldown = cooldown;
+                                        cmds.cycle = cycle;
+                                        putDict(splayer, key, cycle, cmd);
+                                        saveDB();
+                                    }
+                                    else
+                                        player.sendMessage(errc+"Using command \"" + cmd.getRunningCommand() + "\" with "+(cmd.bindto==0?Material.getMaterial(item.id):"slot "+cmd.key)+" is forbidden.");
                                 }
                                 else
                                     sendMessage(player, errc + "ID " + args[1] + " not valid.");
@@ -502,6 +539,10 @@ public class ItemCommands extends JavaPlugin {
                     }
                     else
                         sendMessage(player, errc + "You do not have the required permissions for this.");
+                }
+                else if(args[0].equalsIgnoreCase("flags"))
+                {
+                    showFlags(player);
                 }
                 else
                     showHelp(player);
@@ -760,6 +801,53 @@ public class ItemCommands extends JavaPlugin {
             saveData(data, properties);
         }
     }
+    void readBlacknWhite()
+    {
+        ArrayList<String> data = readData(blacknwhitelist, true);
+        if(data == null){
+            data = new ArrayList();
+            saveData(data, blacknwhitelist);}
+        for(int i = 0; i < data.size(); i++)
+        {
+            String get = data.get(i);
+            boolean allow = get.startsWith("a");
+            get = get.substring(1);
+            boolean slot = get.contains("s|");
+            String[] s;
+            if(slot)
+                s = get.split("s\\|");
+            else
+                s = get.split("i\\|");
+            String[] sids = s[0].split(";");
+            ArrayList<Item> ids = new ArrayList<Item>();
+            for(int i2 = 0; i2 < sids.length; i2++)
+                if(!sids[i2].trim().isEmpty())
+                    ids.add(new Item(sids[i2]));
+            if(allow)
+                this.allow.put((slot?"s":"i")+s[1], ids);
+            else
+                this.deny.put((slot?"s":"i")+s[1], ids);
+        }
+    }
+    void saveBlacknWhite()
+    {
+        ArrayList<String> data = new ArrayList<String>();
+        Enumeration<String> keys = allow.keys();
+        while(keys.hasMoreElements())
+        {
+            String nextElement = keys.nextElement();
+            String bind = nextElement.substring(0, 1);
+            data.add("a"+listToString(allow.get(nextElement).toArray(), "")+bind+"|"+nextElement.substring(1));
+        }
+        keys = deny.keys();
+        while(keys.hasMoreElements())
+        {
+            String nextElement = keys.nextElement();
+            String bind = nextElement.substring(0, 1);
+            data.add("d"+listToString(deny.get(nextElement).toArray(), "")+bind+"|"+nextElement.substring(1));
+        }
+        saveData(data, blacknwhitelist);
+    }
     protected boolean checkPermissions(Player player, String node, boolean needOp)
     {
         if(player == null)
@@ -797,18 +885,42 @@ public class ItemCommands extends JavaPlugin {
         return s;
     }
     void showHelp(Player player){
+        sendMessage(player, errc + "[] is required, <> is optional");
         int i = 0;
         if(checkPermissions(player, "ICmds.create", createNeedOP)) {
-            sendMessage(player, cmdc + "Usage: /icmd add [-i item|-s slot] [flags] [command] "+descc+"#Add command");
+            sendMessage(player, cmdc + "Usage: /icmd add [-i item|-s slot] <flags> [command] "+descc+"#Add command");
             sendMessage(player, cmdc + "/icmd remove [id] "+descc+"#Remove command by ID");
             sendMessage(player, cmdc + "/icmd change [id] <flags> <command> "+descc+"#Change properties of IDs command");
             sendMessage(player, cmdc + "/icmd swap [id #1] [id #2] "+descc+"#Swap commands by ID");
+            sendMessage(player, cmdc + "/icmd flags "+descc+"#Shows flags and their usage");
             i++;}
         if(checkPermissions(player, "ICmds.use", useNeedOP)){
             sendMessage(player, cmdc + "/icmd list <-i item|-s slot> <-g global> "+descc+"#List commands available");
             i++;}
         if(checkPermissions(player, "ICmds.admin", adminNeedOP)){
+            sendMessage(player, cmdc + "/icmd bind"+descc+"#Allow or Block Commands");
             sendMessage(player, cmdc + "/icmd reload");
+            i++;}
+        if(i == 0)
+            sendMessage(player, cmdc + "No Permissions to use ItemCommands");
+    }
+    void showFlags(Player player){
+        int i = 0;
+        if(checkPermissions(player, "ICmds.create", createNeedOP)) {
+            sendMessage(player, cmdc + "-g "+descc+"Add / Change / Swap / Remove / List globally");
+            sendMessage(player, cmdc + "-l "+descc+"Left Click / -r Right Click");
+            sendMessage(player, cmdc + "-e "+descc+"Enable Normal Click Events");
+            sendMessage(player, cmdc + "-d [#] "+descc+"Specifies a Cooldown for the command, Max is around 27h");
+            sendMessage(player, descc + "# Can be in the format #s, #m, #h, just a # defaults as seconds");
+            sendMessage(player, cmdc + "-c [list] "+descc+"Consumables");
+            sendMessage(player, descc + "list = id<:damage>+/-amount;... or $+/-amount;... or *-amount;...");
+            sendMessage(player, cmdc + "-al (all) "+descc+"#Runs all commands");
+            sendMessage(player, cmdc + "-cy (cycle) "+descc+"#Runs one command after another in order");
+            sendMessage(player, cmdc + "-ra (random) "+descc+"#Runs one random command");
+            sendMessage(player, cmdc + "-sh (shuffle) "+descc+"#Runs one random command but runs them the same amount of times");
+            i++;}
+        if(checkPermissions(player, "ICmds.admin", adminNeedOP)){
+            sendMessage(player, cmdc + "-t [id] "+descc+"Only used from Console to specify a slot 1-9 or Item #");
             i++;}
         if(i == 0)
             sendMessage(player, cmdc + "No Permissions to use ItemCommands");
@@ -914,36 +1026,6 @@ public class ItemCommands extends JavaPlugin {
         }
         return data.toArray(a);
     }
-//    ICommands getICmdsByID(Player player, int id, boolean global){
-//        int bindto = 1;
-//        String[] keys = new String[2];
-//        ItemStack is = player.getItemInHand();
-//        keys[0] = String.valueOf(is.getTypeId()) + ":" + String.valueOf(is.getDurability());
-//        keys[1] = String.valueOf(player.getInventory().getHeldItemSlot()+1);
-//        ICommands cmdt = getDict(player.getName(), keys[bindto]).get(keys[bindto]);
-//        ICommand cmd = null;
-//        if (cmdt != null)
-//            cmd = cmdt.findByID(id);
-//        if(cmd == null)
-//        {
-//            cmdt = getDict(player.getName(), keys[1-bindto]).get(keys[1-bindto]);
-//            if(cmdt != null)
-//                cmd = cmdt.findByID(id);
-//            if(cmd == null)
-//            {
-//                cmdt = getDict("", keys[bindto]).get(keys[bindto]);
-//                if(cmdt != null)
-//                    cmd = cmdt.findByID(id);
-//                if(cmd == null)
-//                {
-//                    cmdt = getDict("", keys[1-bindto]).get(keys[1-bindto]);
-//                    if(cmdt != null)
-//                        cmd = cmdt.findByID(id);
-//                }
-//            }
-//        }
-//        return cmdt;
-//    }
     void sendMessage(Player player, String s)
     {
         if(player != null)
@@ -953,7 +1035,7 @@ public class ItemCommands extends JavaPlugin {
             System.out.println(ChatColor.stripColor(s));
         }
     }
-    protected String stringReplacer(String str, Player player, Block block)
+    public String stringReplacer(String str, Player player, Block block)
     {
         if(block != null)
         {
@@ -996,18 +1078,7 @@ public class ItemCommands extends JavaPlugin {
         Matcher m = p.matcher(str);
         while(m.find())
             str = m.replaceAll(ChatColor.getByCode(Integer.parseInt(m.group(1))).toString());
-        p = Pattern.compile("<([0-9]+)-([0-9]+)>");
-        m = p.matcher(str);
         Random r = new Random();
-        while(m.find())
-        {
-            double n = r.nextDouble();
-            int g1 = Integer.parseInt(m.group(1));
-            int g2 = Integer.parseInt(m.group(2));
-            int m1 = Math.max(g1, g2)+1;
-            int m2 = Math.min(g1, g2);
-            str = m.replaceAll(String.valueOf((int)((m1-m2)*n+m2)));
-        }
         p = Pattern.compile("<([^\\|]*)[\\|([^\\|]*)]+>");
         m = p.matcher(str);
         while(m.find())
@@ -1017,14 +1088,34 @@ public class ItemCommands extends JavaPlugin {
             int n = (int)(r.nextDouble()*split.length);
             str = m.replaceAll(split[n]);
         }
+        p = Pattern.compile("<([0-9]+)-([0-9]+)>");
+        m = p.matcher(str);
+        while(m.find())
+        {
+            double n = r.nextDouble();
+            int g1 = Integer.parseInt(m.group(1));
+            int g2 = Integer.parseInt(m.group(2));
+            int m1 = Math.max(g1, g2)+1;
+            int m2 = Math.min(g1, g2);
+            str = m.replaceAll(String.valueOf((int)((m1-m2)*n+m2)));
+        }
         return str;
     }
-    protected String listToString(Object[] o)
+    public String listToString(Object[] o)
     {
         String c = "";
         for(int i = 0; i < o.length; i++)
         {
             c += o[i] + (i != o.length-1 ? ", " : "");
+        }
+        return c;
+    }
+    public String listToString(Object[] o, String seperator)
+    {
+        String c = "";
+        for(int i = 0; i < o.length; i++)
+        {
+            c += o[i] + (i != o.length-1 ? seperator : "");
         }
         return c;
     }
@@ -1209,5 +1300,450 @@ public class ItemCommands extends JavaPlugin {
             time = time.substring(0, time.length());
         }
         return Double.parseDouble(time)*toS;
+    }
+    private void bind(Player player, int option, String[] args)
+    {
+        switch(option)
+        {
+            case 1://add
+                if(checkPermissions(player, "ICmds.admin", adminNeedOP))
+                {
+                    if(args.length >= 6){
+                        int bindto = -1;
+                        int end = 0;
+                        int allow = -1;
+                        int i;
+                        for(i = 3; i < args.length; i++)
+                        {
+                            if(args[i].equalsIgnoreCase("-s"))
+                                bindto = 1;
+                            else if(args[i].equalsIgnoreCase("-i"))
+                                bindto = 0;
+                            else if(args[i].equalsIgnoreCase("-a"))
+                                allow = 1;
+                            else if(args[i].equalsIgnoreCase("-d"))
+                                allow = 0;
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        end = i;
+                        if(allow == -1 || bindto == -1)
+                            sendMessage(player, cmdc + "Usage: /icmd bind add [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Allow or Block Commands By ids (Comma Seperated)");
+                        else
+                        {
+                            String[] sids = args[2].split(",");
+                            
+                            ArrayList<Item> ids = new ArrayList<Item>();
+                            for(int i2 = 0; i2 < sids.length; i2++)
+                            {
+                                ids.add(new Item(sids[i2]));
+                                if(bindto == 1)
+                                {
+                                    int latest = ids.size()-1;
+                                    int id = ids.get(latest).id;
+                                    if(id > 9 || id < 1)
+                                    {
+                                        ids.remove(latest);
+                                        sendMessage(player, errc + "Slot ids are valued 1-9");
+                                    }
+                                }
+                            }
+                            String a = "";
+                            for(i = end; i < args.length; i++)
+                                a += (i == end?"":" ") + args[i];
+                            if(ids.size() > 0){
+                                ArrayList<Item> old;
+                                if(allow == 1)
+                                    old = this.allow.get((bindto==1?"s":"i")+a);
+                                else
+                                    old = this.deny.get((bindto==1?"s":"i")+a);
+                                if(old == null)
+                                    old = new ArrayList<Item>();
+                                int oldSize = old.size();
+                                old.addAll(ids);
+                                if(allow == 1)
+                                    this.allow.put((bindto==1?"s":"i")+a, old);
+                                else
+                                    this.deny.put((bindto==1?"s":"i")+a, old);
+                                saveBlacknWhite();
+                                sendMessage(player, cmdc + "Added "+ids.size()+" to " + oldSize + " id"+(oldSize>1?"s":""));
+                            }
+                            else
+                                sendMessage(player, errc + "Need at least one id");
+                        }
+                    }
+                    else
+                        sendMessage(player, cmdc + "Usage: /icmd bind add [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Allow or Block Commands By ids (Comma Seperated)");
+                }
+                else
+                    sendMessage(player, errc + "You do not have the required permissions for this.");
+                break;
+            case 2://set
+                if(checkPermissions(player, "ICmds.admin", adminNeedOP))
+                {
+                    if(args.length >= 6){
+                        int bindto = -1;
+                        int end = 0;
+                        int allow = -1;
+                        int i;
+                        for(i = 3; i < args.length; i++)
+                        {
+                            if(args[i].equalsIgnoreCase("-s"))
+                                bindto = 1;
+                            else if(args[i].equalsIgnoreCase("-i"))
+                                bindto = 0;
+                            else if(args[i].equalsIgnoreCase("-a"))
+                                allow = 1;
+                            else if(args[i].equalsIgnoreCase("-d"))
+                                allow = 0;
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        end = i;
+                        if(allow == -1 || bindto == -1)
+                            sendMessage(player, cmdc + "Usage: /icmd bind set [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Allow or Block Commands By ids (Comma Seperated)");
+                        else
+                        {
+                            String[] sids = args[2].split(",");
+                            ArrayList<Item> ids = new ArrayList<Item>();
+                            for(int i2 = 0; i2 < sids.length; i2++){
+                                ids.add(new Item(sids[i2]));
+                                if(bindto == 1)
+                                {
+                                    int latest = ids.size()-1;
+                                    int id = ids.get(latest).id;
+                                    if(id > 9 || id < 1)
+                                    {
+                                        ids.remove(latest);
+                                        sendMessage(player, errc + "Slot ids are valued 1-9");
+                                    }
+                                }
+                            }
+                            String a = "";
+                            for(i = end; i < args.length; i++)
+                                a += (i == end?"":" ") + args[i];
+                            int oldSize=0; 
+                            if(allow == 1)
+                                oldSize = this.allow.get((bindto==1?"s":"i")+a).size();
+                            else
+                                oldSize = this.deny.get((bindto==1?"s":"i")+a).size();
+                            if(ids.size() > 0){
+                                if(allow == 1)
+                                    this.allow.put((bindto==1?"s":"i")+a, ids);
+                                else
+                                    this.deny.put((bindto==1?"s":"i")+a, ids);
+                                saveBlacknWhite();
+                                sendMessage(player, cmdc + "Replaced "+oldSize+" id"+(oldSize>1?"s":"")+" with "+ids.size());
+                            }
+                            else
+                                sendMessage(player, errc + "Need at least one id");
+                        }
+                    }
+                    else
+                        sendMessage(player, cmdc + "Usage: /icmd bind set [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Allow or Block Commands By ids (Comma Seperated)");
+                }
+                else
+                    sendMessage(player, errc + "You do not have the required permissions for this.");
+                break;
+            case 3://remove
+                if(checkPermissions(player, "ICmds.admin", adminNeedOP))
+                {
+                    if(args.length >= 6){
+                        int bindto = -1;
+                        int end = 0;
+                        int allow = -1;
+                        int i;
+                        for(i = 3; i < args.length; i++)
+                        {
+                            if(args[i].equalsIgnoreCase("-s"))
+                                bindto = 1;
+                            else if(args[i].equalsIgnoreCase("-i"))
+                                bindto = 0;
+                            else if(args[i].equalsIgnoreCase("-a"))
+                                allow = 1;
+                            else if(args[i].equalsIgnoreCase("-d"))
+                                allow = 0;
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        end = i;
+                        if(allow == -1 || bindto == -1)
+                            sendMessage(player, cmdc + "Usage: /icmd bind remove [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Allow or Block Commands By ids (Comma Seperated or *)");
+                        else
+                        {
+                            String a = "";
+                            for(i = end; i < args.length; i++)
+                                a += (i == end?"":" ") + args[i];
+                            String[] sids = args[2].split(",");
+                            ArrayList<Item> old = new ArrayList<Item>();
+                            if(sids[0].contains("*"))
+                            {
+                                int oldSize=0; 
+                                if(allow == 1)
+                                    oldSize = this.allow.get((bindto==1?"s":"i")+a).size();
+                                else
+                                    oldSize = this.deny.get((bindto==1?"s":"i")+a).size();
+                                if(allow == 1)
+                                    this.allow.put((bindto==1?"s":"i")+a, old);
+                                else
+                                    this.deny.put((bindto==1?"s":"i")+a, old);
+                                saveBlacknWhite();
+                                sendMessage(player, cmdc + "Cleared "+oldSize+" id"+(oldSize>1?"s":""));
+                            }
+                            else
+                            {
+                                ArrayList<Item> ids = new ArrayList<Item>();
+                                for(int i2 = 0; i2 < sids.length; i2++)
+                                {
+                                    ids.add(new Item(sids[i2]));
+                                    if(bindto == 1)
+                                    {
+                                        int latest = ids.size()-1;
+                                        int id = ids.get(latest).id;
+                                        if(id > 9 || id < 1)
+                                        {
+                                            ids.remove(latest);
+                                            sendMessage(player, errc + "Slot ids are valued 1-9");
+                                        }
+                                    }
+                                }
+                                if(ids.size() > 0){
+                                    if(allow == 1)
+                                        old = this.allow.get((bindto==1?"s":"i")+a);
+                                    else
+                                        old = this.deny.get((bindto==1?"s":"i")+a);
+                                    if(old == null)
+                                        old = new ArrayList<Item>();
+                                    int oldSize = old.size();
+                                    old.removeAll(ids);
+                                    if(allow == 1)
+                                        this.allow.put((bindto==1?"s":"i")+a, old);
+                                    else
+                                        this.deny.put((bindto==1?"s":"i")+a, old);
+                                    saveBlacknWhite();
+                                    sendMessage(player, cmdc + "Removed "+ids.size()+" of " + oldSize + " id"+(oldSize>1?"s":""));
+                                }
+                                else
+                                    sendMessage(player, errc + "Need at least one id");
+                            }
+                        }
+                    }
+                    else
+                            sendMessage(player, cmdc + "Usage: /icmd bind remove [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Allow or Block Commands By ids (Comma Seperated or *)");
+                }
+                else
+                    sendMessage(player, errc + "You do not have the required permissions for this.");
+                break;
+            case 4://list
+                if(checkPermissions(player, "ICmds.use", useNeedOP))
+                {
+                    if(args.length >= 4){
+                        boolean msg = false;
+                        int bindto = -1;
+                        int end = 0;
+                        int allow = -1;
+                        int i;
+                        boolean useCmd = true;
+                        for(i = 2; i < args.length; i++)
+                        {
+                            if(args[i].equalsIgnoreCase("-s"))
+                                bindto = 1;
+                            else if(args[i].equalsIgnoreCase("-i"))
+                                bindto = 0;
+                            else if(args[i].equalsIgnoreCase("-a"))
+                                allow = 1;
+                            else if(args[i].equalsIgnoreCase("-d"))
+                                allow = 0;
+                            else
+                            {
+                                if(i == 2)
+                                {
+                                    useCmd = false;
+                                }
+                                else
+                                    break;
+                            }
+                        }
+                        end = i;
+                        if(bindto == -1){
+                            sendMessage(player, cmdc + "Usage: /icmd bind list [-i item|-s slot] <-a allow|-d deny> [command] "+descc+"#List Allowed or Blocked ids By Commands");
+                            sendMessage(player, cmdc + "Usage: /icmd bind list [id] [-i item|-s slot] <-a allow|-d deny> "+descc+"#List Allowed or Blocked Commands By id");
+                        }
+                        else
+                        {
+                            if(useCmd)
+                            {
+                                String a = (bindto==1?"s":"i");
+                                for(i = end; i < args.length; i++)
+                                    a += (i == end?"":" ") + args[i].trim();
+
+                                Enumeration<String> keys;
+                                String c = (bindto==1?"Slots ":"Items ");
+                                ArrayList<Item> old;
+                                if(allow == 1 || allow == -1)
+                                {
+                                    keys = this.allow.keys();
+                                    while(keys.hasMoreElements())
+                                    {
+                                        String nextElement = keys.nextElement();
+                                        if(nextElement.startsWith(a))
+                                        {
+                                            old = this.allow.get(nextElement);
+                                            String listToString = listToString(old.toArray(), "").replaceAll(";", ", ");
+                                            listToString = listToString.substring(0, listToString.length() - 2);
+                                            sendMessage(player, cmdc + nextElement.substring(1)+ " can be used with "+c + listToString);
+                                            msg = true;
+                                        }
+                                    }
+                                }
+                                if(allow == 0 || allow == -1){
+                                    keys = this.deny.keys();
+                                    while(keys.hasMoreElements())
+                                    {
+                                        String nextElement = keys.nextElement();
+                                        if(nextElement.startsWith(a))
+                                        {
+                                            old = this.deny.get(nextElement);
+                                            String listToString = listToString(old.toArray(), "").replaceAll(";", ", ");
+                                            listToString = listToString.substring(0, listToString.length() - 2);
+                                            sendMessage(player, cmdc + nextElement.substring(1)+ " cannot be used with "+c + listToString);
+                                            msg = true;
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                String c = (bindto==1?"Slots ":"Items ");
+                                Enumeration<String> keys;
+                                ArrayList<Item> old;
+                                String id = args[2];
+                                int i2 = id.indexOf(":");
+                                int data = -1;
+                                int intId;
+                                if(i2 != -1)
+                                {
+                                    try{
+                                        data = Integer.parseInt(id.substring(i2+1));}
+                                    catch(NumberFormatException e2){}
+                                    id = id.substring(0, i2);}
+                                try
+                                {
+                                    intId = Integer.parseInt(id);
+                                }
+                                catch(NumberFormatException e2)
+                                {
+                                    sendMessage(player, errc + "Could not read the id.");
+                                    intId = -1;
+                                }
+                                
+                                if(bindto == 1 && (intId > 9 || intId < 1))
+                                {
+                                    sendMessage(player, errc + "Slot ids are valued 1-9");
+                                }
+                                else if(intId != -1)
+                                {
+                                    if(allow == 1 || allow == -1)
+                                    {
+                                        keys = this.allow.keys();
+                                        while(keys.hasMoreElements())
+                                        {
+                                            String nextElement = keys.nextElement();
+                                            old = this.allow.get(nextElement);
+                                            if(itemsContains(old, intId, data))
+                                            {
+                                                String listToString = listToString(old.toArray(), "").replaceAll(";", ", ");
+                                                listToString = listToString.substring(0, listToString.length() - 2);
+                                                sendMessage(player, cmdc + nextElement.substring(1) + " can be used with "+c + listToString);
+                                                msg = true;
+                                            }
+                                        }
+                                    }
+                                    if(allow == 0 || allow == -1){
+                                        keys = this.deny.keys();
+                                        while(keys.hasMoreElements())
+                                        {
+                                            String nextElement = keys.nextElement();
+                                            old = this.deny.get(nextElement);
+                                            if(itemsContains(old, intId, data))
+                                            {
+                                                String listToString = listToString(old.toArray(), "").replaceAll(";", ", ");
+                                                listToString = listToString.substring(0, listToString.length() - 2);
+                                                sendMessage(player, cmdc + nextElement.substring(1)+ " cannot be used with "+c + listToString);
+                                                msg = true;
+                                            }
+                                        }
+                                    }
+                                }
+                                else
+                                    sendMessage(player, cmdc + "Usage: /icmd bind list [id] [-i item|-s slot] <-a allow|-d deny> "+descc+"#List Allowed or Blocked Commands By id");
+                            }
+                            if(!msg)
+                                sendMessage(player, cmdc + "Nothing Listed");
+                        }
+                    }
+                    else{
+                        sendMessage(player, cmdc + "Usage: /icmd bind list [-i item|-s slot] <-a allow|-d deny> [command] "+descc+"#List Allowed or Blocked ids By Commands");
+                        sendMessage(player, cmdc + "Usage: /icmd bind list [id] [-i item|-s slot] <-a allow|-d deny> "+descc+"#List Allowed or Blocked Commands By id");}
+                        
+                }
+                else
+                    sendMessage(player, errc + "You do not have the required permissions for this.");
+                break;
+            default:
+                sendMessage(player, errc + "[] is required, <> is optional");
+                if(checkPermissions(player, "ICmds.admin", adminNeedOP)){
+                sendMessage(player, cmdc + "/icmd bind add [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Add ids to Allow or Block Commands (ids Comma Seperated)");
+                sendMessage(player, cmdc + "/icmd bind set [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Set ids to Allow or Block Commands (ids Comma Seperated)");
+                sendMessage(player, cmdc + "/icmd bind remove [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Remove ids to Allow or Block Commands (ids Comma Seperated or *)");}
+                if(checkPermissions(player, "ICmds.use", useNeedOP)){
+                sendMessage(player, cmdc + "Usage: /icmd bind list [-i item|-s slot] <-a allow|-d deny> [command] "+descc+"#List Allowed or Blocked ids By Commands");
+                sendMessage(player, cmdc + "Usage: /icmd bind list [id] [-i item|-s slot] <-a allow|-d deny> "+descc+"#List Allowed or Blocked Commands By id");}
+        }
+    }
+    boolean itemsContains(ArrayList<Item> items, int id, int data)
+    {
+        for(int i = 0; i < items.size(); i++)
+        {
+            if(items.get(i).equals(id, data))
+                return true;
+        }
+        return false;
+    }
+    boolean isListed(ICommand cmd, Item id, boolean slot)
+    {
+        String runningCommand = cmd.getRunningCommand();
+        Enumeration<String> keys = this.deny.keys();
+        while(keys.hasMoreElements())
+        {
+            String nextElement = keys.nextElement();
+            String str = nextElement.substring(1);
+            if(str.startsWith(runningCommand))
+            {
+                ArrayList<Item> asList = this.deny.get(nextElement);
+                if(this.itemsContains(asList, id.id, id.damage))
+                    return false;
+            }
+        }
+        keys = this.allow.keys();
+        while(keys.hasMoreElements())
+        {
+            String nextElement = keys.nextElement();
+            String str = nextElement.substring(1);
+            ArrayList<Item> asList = new ArrayList<Item>();
+            if(str.startsWith(runningCommand))
+                asList.addAll(this.allow.get(nextElement));
+            if(itemsContains(asList, id.id, id.damage))
+                return true;
+            else if(asList.size()>0)
+                return false;
+        }
+        return true;
     }
 }

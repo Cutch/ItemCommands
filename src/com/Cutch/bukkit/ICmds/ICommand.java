@@ -1,6 +1,7 @@
 package com.Cutch.bukkit.ICmds;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 
 public class ICommand
@@ -15,10 +16,11 @@ public class ICommand
     public String player;
     public String key;
     public double cooldown = 0;
+    HashMap<String, Integer> globalCount = new HashMap<String, Integer>();
     HashMap<String, Long> globalCooldown = new HashMap<String, Long>();
     private long lastrun = 0;
     protected ICommands parent = null;
-    int count = 0;
+    private int count = 0;
     public int global = 0;
     public ICommand(String player, String key, String cmd, ItemCommands plugin)
     {
@@ -110,7 +112,32 @@ public class ICommand
             list.add(new Item(s));
         return list;
     }
-    public void count(){
-        count++;
+    public void count(String player){
+        if(isGlobal())
+        {
+            Integer count = globalCount.get(player);
+            if(count == null)
+                count = 0;
+            globalCount.put(player, count+1);
+        }
+        else
+            count++;
+    }
+    public Integer getCount(String player)
+    {
+        if(isGlobal())
+            return globalCount.get(player);
+        return count;
+    }
+    String getRunningCommand()
+    {
+        String[] split = cmd.split(" ");
+        boolean wait = split[0].startsWith("/wait");
+        if(wait)
+             split = Arrays.copyOfRange(split, 2, split.length);
+        String a = "";
+        for(int i = 0; i < split.length; i++)
+            a += (i == 0?"":" ") + split[i];
+        return a;
     }
 }

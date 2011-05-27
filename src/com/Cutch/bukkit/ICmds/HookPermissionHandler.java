@@ -39,7 +39,19 @@ public abstract class HookPermissionHandler extends PermissionHandler {
                 return PermissionsHandler.has(player, string);
         return true;
     }
+    @Override
+    public boolean has(String world, String playerName, String node) {
+        if(!superL.contains(playerName))
+            return PermissionsHandler.has(world, playerName, node);
+        return true;
+    }
 
+    @Override
+    public boolean permission(String world, String playerName, String node) {
+        if(!superL.contains(playerName))
+            return PermissionsHandler.permission(world, playerName, node);
+        return true;
+    }
     @Override
     public void setDefaultWorld(String string) {
         PermissionsHandler.setDefaultWorld(string);
