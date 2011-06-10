@@ -6,6 +6,7 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
 import org.bukkit.ChatColor;
@@ -24,7 +25,7 @@ public class PlayerEvents extends PlayerListener {
     }
     @Override
     public void onPlayerInteract(PlayerInteractEvent event) {
-        ICPlayer player = new ICPlayer(event.getPlayer()) {};
+        ICPlayer player = new ICPlayer(event.getPlayer()) { };
         if(plugin.checkPermissions(player, "ICmds.use", plugin.useNeedOP))
         {
             int click = -1;
@@ -84,7 +85,6 @@ public class PlayerEvents extends PlayerListener {
     }
     void runCommand(PlayerInteractEvent event, int id, ICPlayer player, ICommands cmds, int click, boolean global, boolean slot, Item item)
     {
-
         if(id == -1)
             return;
         ICommand cmd = cmds.findByID(id);
@@ -135,7 +135,7 @@ public class PlayerEvents extends PlayerListener {
                             {
                                 player.addSuperAccess();
                                 if(plugin.pms != null)
-                                    plugin.pms.addSuperAccess(player.getName());
+                                    plugin.pms.addSuperAccess(player.getWorld().getName(), player.getName());
                             }
                             if(p != null)
                             {
@@ -146,7 +146,7 @@ public class PlayerEvents extends PlayerListener {
                             {
                                 player.removeSuperAccess();
                                 if(plugin.pms != null)
-                                    plugin.pms.removeSuperAccess(player.getName());
+                                    plugin.pms.removeSuperAccess(player.getWorld().getName(), player.getName());
                             }
                         }
                     }

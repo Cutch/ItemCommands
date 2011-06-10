@@ -11,6 +11,7 @@ import java.io.IOException;
 import me.taylorkelly.help.Help;
 import org.bukkit.Location;
 import org.bukkit.Server;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.plugin.Plugin;
 
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ import java.util.Collections;
 import java.util.Dictionary;
 import java.util.Enumeration;
 import java.util.Hashtable;
+import java.util.List;
 import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -64,7 +66,6 @@ public class ItemCommands extends JavaPlugin {
     public Dictionary<String, ArrayList<Item>> deny=null;
 
     public void onDisable() {
-        pms.disable();
         System.out.println("ItemCommands is Disabled");
     }
 
@@ -77,7 +78,7 @@ public class ItemCommands extends JavaPlugin {
         readPref();
         try
         {
-            pms = new PermissionSupport(this){};
+            pms = new PermissionSupport(this);
             permissionsType = pms.setupPermissions(permissionsType);
         }catch(NoClassDefFoundError e){
             permissionsType=1;
@@ -100,7 +101,7 @@ public class ItemCommands extends JavaPlugin {
         String splayer = "";
         if(sender instanceof Player)
         {
-            player = new ICPlayer((Player)sender) {};
+            player = new ICPlayer((Player)sender) { };
             splayer = player.getName();
         }
         if(cmdmsg.equalsIgnoreCase("icmd"))
@@ -492,6 +493,7 @@ public class ItemCommands extends JavaPlugin {
                     {
                         int fper = 1;
                         int fbindto = -1;
+                        int page = 1;
                         for(int i = 1; i < args.length; i+=1)
                         {
                             if(args[i].equalsIgnoreCase("-s"))
@@ -500,6 +502,13 @@ public class ItemCommands extends JavaPlugin {
                                 fbindto = 0;
                             else if(args[i].equalsIgnoreCase("-g"))
                                 fper = 0;
+                            else
+                            {
+                                try{
+                                    page = Integer.parseInt(args[i]);
+                                }
+                                catch(Exception e){}
+                            }
                         }
                         String str = "Commands (" + (fper == 0 || splayer.isEmpty() ? "Global" : splayer) + ")";
                         sendMessage(player, infoc + "  ID     Item/Slot     Click Trigger     " + str);
@@ -508,22 +517,44 @@ public class ItemCommands extends JavaPlugin {
                         if(get != null)
                         {
                             Enumeration<ICommands> elements = get.elements();
-                            int linei = 0;
+                            List<Integer> iDList = new ArrayList<Integer>();
                             while(elements.hasMoreElements())
                             {
                                 ICommands cmds = elements.nextElement();
-                                Integer[] iDList = cmds.getIDList();
-                                for (Integer id : iDList)
+                                Integer[] iDs = cmds.getIDList();
+                                iDList.addAll(Arrays.asList(iDs));
+//                                for (Integer id : iDs)
+//                                {
+//                                    ICommand cmd = cmds.findByID(id);
+//                                    if(fbindto == -1 || cmd.bindto == fbindto)
+//                                    {
+//                                        String click = (cmd.click == 1 ? "Left" : "Right");
+//                                        sendMessage(player, (linei%2==0 ? cmdc : descc) + lspace(String.valueOf(cmd.id)," ",4) + "     " + lspace(cmd.key.replaceAll(":0", "")," ",9) + lspace(click," ",20) + "     "+ cmd.cmd);
+//                                        linei++;
+//                                    }
+//                                }
+                            }
+                            ICommands cmds = null;
+//                            Integer[] toArray = (Integer[])iDList.toArray();
+                            int maxpage = (iDList.size() / 12)+1;
+                            page = Math.max(Math.min(page, (iDList.size() / 12)+1), 1);
+                            int max = Math.min((page)*12, iDList.size());
+                            for (int i = (page-1)*12; i < max; i++)
+                            {
+                                if(cmds == null)
+                                    cmds = getICmdsByID(splayer, iDList.get(i));
+                                ICommand cmd = cmds.findByID(iDList.get(i));
+                                if(cmd == null){
+                                    cmds = getICmdsByID(splayer, iDList.get(i));
+                                    cmd = cmds.findByID(iDList.get(i));
+                                }
+                                if(fbindto == -1 || cmd.bindto == fbindto)
                                 {
-                                    ICommand cmd = cmds.findByID(id);
-                                    if(fbindto == -1 || cmd.bindto == fbindto)
-                                    {
-                                        String click = (cmd.click == 1 ? "Left" : "Right");
-                                        sendMessage(player, (linei%2==0 ? cmdc : descc) + lspace(String.valueOf(cmd.id)," ",4) + "     " + lspace(cmd.key.replaceAll(":0", "")," ",9) + lspace(click," ",20) + "     "+ cmd.cmd);
-                                        linei++;
-                                    }
+                                    String click = (cmd.click == 1 ? "Left" : "Right");
+                                    sendMessage(player, (i%2==0 ? cmdc : descc) + lspace(String.valueOf(cmd.id)," ",4) + "     " + lspace(cmd.key.replaceAll(":0", "")," ",9) + lspace(click," ",20) + "     "+ cmd.cmd);
                                 }
                             }
+                            sendMessage(player, "Page "+String.valueOf(page)+" of "+String.valueOf(maxpage));
                         }
                     }
                     else
@@ -574,7 +605,7 @@ public class ItemCommands extends JavaPlugin {
         if (test != null) {
             String[] permissions = new String[]{"ICmds.create", "ICmds.use", "ICmds.admin"};
             Help help = ((Help)test);
-            help.registerCommand("ic", "Help for Item Commands", this, true, permissions);
+            help.registerCommand("icmd", "Help for Item Commands", this, true, permissions);
         }
     }
     void saveData(ArrayList<String> data, String file)
@@ -898,7 +929,7 @@ public class ItemCommands extends JavaPlugin {
             sendMessage(player, cmdc + "/icmd list <-i item|-s slot> <-g global> "+descc+"#List commands available");
             i++;}
         if(checkPermissions(player, "ICmds.admin", adminNeedOP)){
-            sendMessage(player, cmdc + "/icmd bind"+descc+"#Allow or Block Commands");
+            sendMessage(player, cmdc + "/icmd bind "+descc+"#Allow or Block Commands");
             sendMessage(player, cmdc + "/icmd reload");
             i++;}
         if(i == 0)
@@ -1004,7 +1035,7 @@ public class ItemCommands extends JavaPlugin {
                 return i;
         }
         return iDs.length+1;
-    }
+    } 
     public Integer[] getIDs(String player)
     {
         ArrayList<Integer> data = new ArrayList<Integer>();
@@ -1034,7 +1065,7 @@ public class ItemCommands extends JavaPlugin {
         {
             System.out.println(ChatColor.stripColor(s));
         }
-    }
+    }         
     public String stringReplacer(String str, Player player, Block block)
     {
         if(block != null)
@@ -1330,7 +1361,7 @@ public class ItemCommands extends JavaPlugin {
                         }
                         end = i;
                         if(allow == -1 || bindto == -1)
-                            sendMessage(player, cmdc + "Usage: /icmd bind add [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Allow or Block Commands By ids (Comma Seperated)");
+                            sendMessage(player, cmdc + "Usage: /icmd bind add [ids] [-a allow|-d deny] [-i item|-s slot] [command] "+descc+"#Allow or Block Commands By ids (Comma Seperated)");
                         else
                         {
                             String[] sids = args[2].split(",");
@@ -1375,7 +1406,7 @@ public class ItemCommands extends JavaPlugin {
                         }
                     }
                     else
-                        sendMessage(player, cmdc + "Usage: /icmd bind add [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Allow or Block Commands By ids (Comma Seperated)");
+                        sendMessage(player, cmdc + "Usage: /icmd bind add [ids] [-a allow|-d deny] [-i item|-s slot] [command] "+descc+"#Allow or Block Commands By ids (Comma Seperated)");
                 }
                 else
                     sendMessage(player, errc + "You do not have the required permissions for this.");
@@ -1405,7 +1436,7 @@ public class ItemCommands extends JavaPlugin {
                         }
                         end = i;
                         if(allow == -1 || bindto == -1)
-                            sendMessage(player, cmdc + "Usage: /icmd bind set [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Allow or Block Commands By ids (Comma Seperated)");
+                            sendMessage(player, cmdc + "Usage: /icmd bind set [ids] [-a allow|-d deny] [-i item|-s slot] [command] "+descc+"#Allow or Block Commands By ids (Comma Seperated)");
                         else
                         {
                             String[] sids = args[2].split(",");
@@ -1444,7 +1475,7 @@ public class ItemCommands extends JavaPlugin {
                         }
                     }
                     else
-                        sendMessage(player, cmdc + "Usage: /icmd bind set [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Allow or Block Commands By ids (Comma Seperated)");
+                        sendMessage(player, cmdc + "Usage: /icmd bind set [ids] [-a allow|-d deny] [-i item|-s slot] [command] "+descc+"#Allow or Block Commands By ids (Comma Seperated)");
                 }
                 else
                     sendMessage(player, errc + "You do not have the required permissions for this.");
@@ -1474,7 +1505,7 @@ public class ItemCommands extends JavaPlugin {
                         }
                         end = i;
                         if(allow == -1 || bindto == -1)
-                            sendMessage(player, cmdc + "Usage: /icmd bind remove [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Allow or Block Commands By ids (Comma Seperated or *)");
+                            sendMessage(player, cmdc + "Usage: /icmd bind remove [ids] [-a allow|-d deny] [-i item|-s slot] [command] "+descc+"#Allow or Block Commands By ids (Comma Seperated or *)");
                         else
                         {
                             String a = "";
@@ -1535,7 +1566,7 @@ public class ItemCommands extends JavaPlugin {
                         }
                     }
                     else
-                            sendMessage(player, cmdc + "Usage: /icmd bind remove [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Allow or Block Commands By ids (Comma Seperated or *)");
+                            sendMessage(player, cmdc + "Usage: /icmd bind remove [ids] [-a allow|-d deny] [-i item|-s slot] [command] "+descc+"#Allow or Block Commands By ids (Comma Seperated or *)");
                 }
                 else
                     sendMessage(player, errc + "You do not have the required permissions for this.");
@@ -1699,12 +1730,12 @@ public class ItemCommands extends JavaPlugin {
             default:
                 sendMessage(player, errc + "[] is required, <> is optional");
                 if(checkPermissions(player, "ICmds.admin", adminNeedOP)){
-                sendMessage(player, cmdc + "/icmd bind add [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Add ids to Allow or Block Commands (ids Comma Seperated)");
-                sendMessage(player, cmdc + "/icmd bind set [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Set ids to Allow or Block Commands (ids Comma Seperated)");
-                sendMessage(player, cmdc + "/icmd bind remove [ids] [-a allow|-d deny] [-i item|-s slot] [command]"+descc+"#Remove ids to Allow or Block Commands (ids Comma Seperated or *)");}
+                sendMessage(player, cmdc + "/icmd bind add [ids] [-a allow|-d deny] [-i item|-s slot] [command] "+descc+"#Add ids to Allow or Block Commands (ids Comma Seperated)");
+                sendMessage(player, cmdc + "/icmd bind set [ids] [-a allow|-d deny] [-i item|-s slot] [command] "+descc+"#Set ids to Allow or Block Commands (ids Comma Seperated)");
+                sendMessage(player, cmdc + "/icmd bind remove [ids] [-a allow|-d deny] [-i item|-s slot] [command] "+descc+"#Remove ids to Allow or Block Commands (ids Comma Seperated or *)");}
                 if(checkPermissions(player, "ICmds.use", useNeedOP)){
-                sendMessage(player, cmdc + "Usage: /icmd bind list [-i item|-s slot] <-a allow|-d deny> [command] "+descc+"#List Allowed or Blocked ids By Commands");
-                sendMessage(player, cmdc + "Usage: /icmd bind list [id] [-i item|-s slot] <-a allow|-d deny> "+descc+"#List Allowed or Blocked Commands By id");}
+                sendMessage(player, cmdc + "/icmd bind list [-i item|-s slot] <-a allow|-d deny> [command] "+descc+"#List Allowed or Blocked ids By Commands");
+                sendMessage(player, cmdc + "/icmd bind list [id] [-i item|-s slot] <-a allow|-d deny> "+descc+"#List Allowed or Blocked Commands By id");}
         }
     }
     boolean itemsContains(ArrayList<Item> items, int id, int data)

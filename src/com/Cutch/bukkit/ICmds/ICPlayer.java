@@ -4,6 +4,7 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.UUID;
 import org.bukkit.Achievement;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -17,6 +18,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Snowball;
 import org.bukkit.entity.Vehicle;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.util.Vector;
@@ -362,5 +364,15 @@ public abstract class ICPlayer implements Player {
 
     public void sendBlockChange(Location lctn, int i, byte b) {
         player.sendBlockChange(lctn, i, b);
+    }
+    public void setLastDamageCause(EntityDamageEvent ede) {
+        player.setLastDamageCause(ede);
+    }
+
+    public EntityDamageEvent getLastDamageCause() {
+        return player.getLastDamageCause();
+    }
+    public UUID getUniqueId() {
+        return player.getUniqueId();
     }
 }

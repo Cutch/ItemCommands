@@ -2,14 +2,14 @@ package com.Cutch.bukkit.ICmds;
 
 import com.nijiko.permissions.PermissionHandler;
 import com.nijikokun.bukkit.Permissions.Permissions;
+import java.util.Set;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
-public abstract class PermissionSupport {
+public class PermissionSupport {
     ItemCommands plugin = null;
     String Version = "";
     private PermissionHandler Permissions=null;
-    private HookPermissionHandler hookPermissionHandler=null;
     int permissionsType = 0;
     public PermissionSupport(ItemCommands instance)
     {
@@ -21,7 +21,13 @@ public abstract class PermissionSupport {
             if(test != null) {
                 Permissions p = (Permissions)test;
                 Version = p.getDescription().getVersion();
-                p.Security = hookPermissionHandler = new HookPermissionHandler(p) { };
+//                if(compareVersions(Version, "3.1.5") >= 0 || compareVersions(Version, "3.0") == -1)
+//                {
+//                    HookPermissionHandler.PermissionsHandler = p.getHandler();
+//                    hookPermissionHandler = new HookPermissionHandler(p) { };
+//                }
+//                else
+//                    System.out.println("ItemCommands: Permissions Super Support is Disabled");
                 this.Permissions = p.getHandler();
                 if(permissionsType == 0)
                     System.out.println("ItemCommands: Using Permissions Plugin v" + Version);
@@ -40,26 +46,43 @@ public abstract class PermissionSupport {
     public int returnPermissionType(){
         return permissionsType; 
     }
-    public void disable()
-    {
-        if(permissionsType == 0)
-        {
-            Permissions p = (Permissions)plugin.getServer().getPluginManager().getPlugin("Permissions");
-            p.Security = hookPermissionHandler.PermissionsHandler;
-        }
-    }
     public boolean has(Player name, String node)
     {
-        return this.Permissions.has(name, node);
+        if(this.Permissions != null)
+            return this.Permissions.has(name, node);
+        return false;
     }
-    public void addSuperAccess(String name)
+    public void addSuperAccess(String world, String name)
     {
-        if(hookPermissionHandler != null)
-            hookPermissionHandler.addSuperAccess(name);
+        if(this.Permissions != null)
+            this.Permissions.addUserPermission(world, name, "*");
     }
-    public void removeSuperAccess(String name)
+    public void removeSuperAccess(String world, String name)
     {
-        if(hookPermissionHandler != null)
-            hookPermissionHandler.removeSuperAccess(name);
+        if(this.Permissions != null)
+            this.Permissions.removeUserPermission(world, name, "*");
+    }
+    int compareVersions(String versionStr1, String versionStr2)
+    {
+        String[] split1 = versionStr1.split("\\.");
+        Integer[] v1 = new Integer[split1.length];
+        String[] split2 = versionStr2.split("\\.");
+        Integer[] v2 = new Integer[split2.length];
+        for(int i = 0; i < split1.length; i++)
+            v1[i] = Integer.parseInt(split1[i]);
+        for(int i = 0; i < split2.length; i++)
+            v2[i] = Integer.parseInt(split2[i]);
+        int minL = Math.min(v1.length, v2.length);
+        
+        for(int i = 0; i < minL; i++)
+        {
+            if(v1[i] == v2[i])
+                continue;
+            else if(v1[i] > v2[i])
+                return 1;
+            else
+                return -1;
+        }
+        return 0;
     }
 }

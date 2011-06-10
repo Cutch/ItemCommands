@@ -92,7 +92,10 @@ public class ICommand
         else
         {
             long currentTime = System.currentTimeMillis();
-            if(currentTime - globalCooldown.get(player) > cooldown*1000)
+            Long i = globalCooldown.get(player);
+            if(i == null)
+                i = new Long(0);
+            if(currentTime - i > cooldown*1000)
             {
                 globalCooldown.put(player, System.currentTimeMillis());
                 return true;
